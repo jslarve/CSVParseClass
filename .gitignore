@@ -1,0 +1,7 @@
+*.dll
+*.exe
+/obj/*
+/map/*
+/CSVReader.sln.cache
+/D32.LOG
+*.bak
