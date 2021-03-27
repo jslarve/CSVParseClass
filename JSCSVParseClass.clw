@@ -200,9 +200,10 @@ JSCSVParseClass.GetBufferSize         PROCEDURE()!,LONG
 !!! <summary>Retrieve the maximum Len of a column</summary>
 !!! <param name="pColumn">Column which column to test</param>
 !!! <param name="pLimit">Maximum Len to test</param>
+!!! <param name="pType">Maximum or Total</param>
 !!! <returns>A LONG</returns>
 !======================================================================================================================================================
-JSCSVParseClass.GetMaximumColumnLen PROCEDURE(LONG pColumn,LONG pLimit=0)!,LONG!Gets the maximum width of a column
+JSCSVParseClass.GetColumnLen   PROCEDURE(LONG pColumn,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max)!,LONG!Gets the maximum or total width of a column
 Ndx1       LONG
 CurLen     LONG
 MaxLen     LONG
@@ -211,14 +212,19 @@ MaxLen     LONG
 
   MaxLen = 0
   LOOP Ndx1 = 1 TO SELF.GetRowCount()
-    CurLen = SELF.GetCellLen(Ndx1,pColumn)
-    IF CurLen > MaxLen
-      MaxLen = CurLen
-    END
-    IF pLimit
-      IF MaxLen => pLimit
-        BREAK
+    CASE pType
+    OF JSCSV:ColumnLen:Max
+      CurLen = SELF.GetCellLen(Ndx1,pColumn)
+      IF CurLen > MaxLen
+        MaxLen = CurLen
       END
+      IF pLimit
+        IF MaxLen => pLimit
+          BREAK
+        END
+      END
+    OF JSCSV:ColumnLen:Total
+      MaxLen += SELF.GetCellLen(Ndx1,pColumn)
     END
   END
   RETURN MaxLen
@@ -282,6 +288,39 @@ JSCSVParseClass.GetRowCount  PROCEDURE()!,LONG
   CODE
   
   RETURN RECORDS(SELF.Q) - CHOOSE(BAND(SELF.Flags,JSCSV:FirstRowIsLabels))
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Retrieve the maximum Len of the cells of a row</summary>
+!!! <param name="pRow">Row which column to test</param>
+!!! <param name="pLimit">Maximum Len to test</param>
+!!! <param name="pType">Maximum or Total</param>
+!!! <returns>A LONG</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GetRowLen   PROCEDURE(LONG pRow,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max)!,LONG!Gets the maximum or total width of the cells of a row
+Ndx1       LONG
+CurLen     LONG
+MaxLen     LONG
+
+  CODE
+
+  MaxLen = 0
+  LOOP Ndx1 = 1 TO SELF.GetColumnCount()
+    CASE pType
+    OF JSCSV:ColumnLen:Max
+      CurLen = SELF.GetCellLen(pRow,Ndx1)
+      IF CurLen > MaxLen
+        MaxLen = CurLen
+      END
+      IF pLimit
+        IF MaxLen => pLimit
+          BREAK
+        END
+      END
+    OF JSCSV:ColumnLen:Total
+      MaxLen += SELF.GetCellLen(pRow,Ndx1)
+    END
+  END
+  RETURN MaxLen
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Load a Delimiter Separated File</summary>
@@ -710,7 +749,9 @@ JSCSVParseClass.TakeEvent  PROCEDURE(SIGNED pEvent)
 CurColumn   LONG
 CurRow      LONG
 RowCount    LONG
-SS          SystemStringClass
+WorkString  &STRING
+CurPos      LONG
+CurCellLen  LONG
 
   CODE
 
@@ -757,27 +798,33 @@ SS          SystemStringClass
   
 CopyColumn ROUTINE
 
-  SS.Resize(0)
-  CurColumn = SELF.Win $ SELF.FEQ{PROP:Column}
+  CurColumn = SELF.Win $ SELF.FEQ{PROPList:MouseDownField}
+  WorkString &= NEW STRING(SELF.GetColumnLen(CurColumn,,JSCSV:ColumnLen:Total) + (SELF.GetRowCount() * 2) - 2)
   IF CurColumn
+    CurPos = 1
     LOOP curRow = 1 TO SELF.GetRowCount()
-      SS.Append(SELF.GetCellValue(curRow,CurColumn) & '<13,10>')
+      CurCellLen = SELF.GetCellLen(CurRow,CurColumn)
+      WorkString[CurPos : CurPos + CurCellLen + 1] = SELF.GetCellValue(curRow,CurColumn) & CHOOSE(CurRow < SELF.GetRowCount(),'<13,10>','')
+      CurPos += (CurCellLen + 2)
     END
   END 
-  !Need to append more smartly like StringTheory here, because it gives extra CRLF, will look at later.
-   SETCLIPBOARD(SS.GetString())
+   SETCLIPBOARD(WorkString)
+   DISPOSE(WorkString)
   
 CopyRow    ROUTINE
 
-  SS.Resize(0)
   CurRow = SELF.Win $ SELF.FEQ{PROP:Selected}
   IF CurRow
+    CurPos = 1
+    WorkString &= NEW STRING(SELF.GetRowLen(CurRow,,JSCSV:ColumnLen:Total) + (SELF.GetRowCount() ) - 1)
     LOOP CurColumn = 1 TO SELF.GetColumnCount()
-      SS.Append(SELF.GetCellValue(CurRow,CurColumn) & '<9>')
-    END
+      CurCellLen = SELF.GetCellLen(CurRow,CurColumn)
+      WorkString[CurPos : CurPos + CurCellLen + 1] = SELF.GetCellValue(curRow,CurColumn) & CHOOSE(CurColumn < SELF.GetColumnCount(),'<9>','')
+      CurPos += (CurCellLen + 1)
+    END  
   END
-  !Need to append more smartly like StringTheory here, because it gives extra TAB, will look at later. 
-   SETCLIPBOARD(SS.GetString())
+  SETCLIPBOARD(WorkString)
+  DISPOSE(WorkString)
     
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Unregisters the registered events</summary>

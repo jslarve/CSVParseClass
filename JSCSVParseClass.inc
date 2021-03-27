@@ -31,6 +31,10 @@ OMIT('_EndOfInclude_',_JSCSVParsePresent_)
 _JSCSVParsePresent_      EQUATE(1)
                                        
 JSCSV:FirstRowIsLabels   EQUATE(01h)   !A flag to tell class that first row of CSV is for labels only.
+JSCSV:ColumnLen ITEMIZE(1),PRE()
+Max               EQUATE               !A switch for GetColumnLen - Get Max length
+Total             EQUATE               !A switch for GetColumnLen - Get Total length
+                END
 JSCSVColumnDefGroupType  GROUP,TYPE    !Each column gets its own instance of this buffer 
 Name                       STRING(60)  !The name of the column (goes at the header)
 Flags                      LONG        !
@@ -83,9 +87,10 @@ GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),*STRING !Retrieves 
 GetColumnCount             PROCEDURE(),LONG                          !Retrieves the number of columns
 GetColumnLabel             PROCEDURE(LONG pColumn),STRING            !Retrieves the name of the specified column.
 GetBufferSize              PROCEDURE(),LONG                          !Gets the size of the buffer
-GetMaximumColumnLen        PROCEDURE(LONG pColumn,LONG pLimit=0),LONG!Gets the maximum width of a column
+GetColumnLen               PROCEDURE(LONG pColumn,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max),LONG!Gets the maximum or total width of a column
 GetMaximumColumnTextWidth  PROCEDURE(LONG pColumn,LONG pLimit=0),LONG!Gets the maximum width of a listbox column
 GetRowCount                PROCEDURE(),LONG                          !RECORDS(SELF.Q)
+GetRowLen                  PROCEDURE(LONG pRow,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max),LONG!Gets the maximum or total width of a the cells of a row
 LoadBuffer                 PROCEDURE(*STRING pBuffer)                !Assigns the buffer of CSV data
 LoadFile                   PROCEDURE(STRING pFileName),LONG,PROC    !Load a file
 SetColumnLabel             PROCEDURE(LONG pColumn,*JSCSVColumnDefGroupType pColumnDef),VIRTUAL !Virtual method gets called when setting the labels of the columns, in case you want to customize label
