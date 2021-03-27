@@ -747,7 +747,7 @@ SS          SystemStringClass
       END
     OF MouseLeft2
       IF SELF.Win $ SELF.FEQ{PROPLIST:MouseDownRow} = 0
-        CurColumn = SELF.Win $ SELF.FEQ{PROP:Column}
+        CurColumn = SELF.Win $ SELF.FEQ{PROPLIST:MouseDownField}
         SELF.AdjustColumnWidth(CurColumn)   
       END
     END
