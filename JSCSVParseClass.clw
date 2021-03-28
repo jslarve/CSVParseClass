@@ -29,7 +29,7 @@ Line     &STRING  !A direct reference to a particular row of the original CSV bu
 Columns  &STRING  !A pseudo record of &STRING references that represent the data inside the Line column above. This reference is part of SELF.Refbuffer.
         END
    
-   INCLUDE('JSCSVParseClass.inc'),ONCE
+   INCLUDE('JSCSVParseClass.inc'),ONCE !
    INCLUDE('KEYCODES.CLW'),ONCE
 
    MAP

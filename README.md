@@ -11,7 +11,7 @@ Regarding all of the PRIVATE stuff in the class, you are welcome to do whatever 
 
 There are quite a few features that I've meant to add, such as import/export of the grid map (so it doesn't have to re-parse every time you load the same CSV), and export of XML/JSON.
 
-Perhaps I could do a presentation on it some day.
+Perhaps I could do a presentation on it some day. 
 
 ## NOTE: This has not been extensively tested. It works on what I've thrown at it. Usually the problem is with the wrong separator or line endings.
 

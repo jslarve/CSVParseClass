@@ -2,7 +2,7 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
 # Clarion 2.1.0.2447
-Project("{12B76EC0-1D7B-4FA7-A7D0-C524288B48A1}") = "CSVReader", "CSVReader.cwproj", "{5884013C-D5FD-41DF-8AD6-7F3EB04EA5FB}"
+Project("{12B76EC0-1D7B-4FA7-A7D0-C524288B48A1}") = "CSVReader", "CSVReader.cwproj","{5884013C-D5FD-41DF-8AD6-7F3EB04EA5FB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
