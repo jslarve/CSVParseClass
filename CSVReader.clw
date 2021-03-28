@@ -23,7 +23,7 @@
 !SOFTWARE.
 
   
-  INCLUDE('JSCSVParseClass.inc'),ONCE !
+  INCLUDE('JSCSVParseClass.inc'),ONCE 
 
 CSV        CLASS(JSCSVParseClass)
 TakeProgress PROCEDURE(LONG pProgressPct,LONG pProgress,LONG pRows),DERIVED
