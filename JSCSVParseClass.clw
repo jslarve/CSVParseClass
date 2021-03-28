@@ -356,8 +356,10 @@ JSCSVParseClass.LoadBuffer   PROCEDURE(*STRING pBuffer)
   SELF.Buffer &= pBuffer
   SELF.Len     = SIZE(pBuffer)
   IF SELF.ParseRows()
+    SELF.ParseColumns()
+  ELSE
+    !TODO - Need to let user know that the line endings are probably wrong.
   END
-  SELF.ParseColumns()
   SELF.SetFormatString
   SELF.DataChanged = TRUE
 
@@ -416,14 +418,19 @@ CountColumns ROUTINE
   END
   SaveNdx   = 1
   LOOP Ndx1 = SaveNdx TO SELF.Q.Len 
+    IF Ndx1 > SELF.Q.Len 
+      BREAK
+    END
     IF SELF.Q.Line[Ndx1] = '"'
       IF InsideQuote
-        ColumnCount += 1
         ColumnNameQ.Label = SELF.Q.Line[SaveNdx : Ndx1-1]
         ADD(ColumnNameQ)
         SaveNdx      = Ndx1 + SeparatorLen + 1
+        IF Ndx1 < SELF.Q.Len
+          Ndx1        += 1
+          ColumnCount += 1
+        END
         InsideQuote  = FALSE
-        ColumnCount += 1
         CYCLE
       ELSE
         InsideQuote  = TRUE
@@ -470,7 +477,13 @@ ProgressTic   LONG,AUTO !Frequency of progress display. This area needs work.
   END
   SeparatorLen = LEN(SELF.Separator)
   Recs          = RECORDS(SELF.Q)
+  IF NOT Recs
+    RETURN
+  END
   ProgressTic   = Recs / 50
+  IF NOT ProgressTic
+    ProgressTic = Recs
+  END
   LOOP LineNdx1 = 1 TO Recs
     GET(SELF.Q,LineNdx1)
     SELF.QPointer   = LineNdx1
@@ -529,7 +542,7 @@ SaveNdx       LONG,AUTO
 LineEndingLen LONG,AUTO
 
   CODE   
-  
+
   IF SELF.Buffer &= NULL
     RETURN 0
   END
@@ -594,7 +607,11 @@ Ndx1       LONG
   IF SELF.FEQ = 0
     RETURN
   END   
-  LOOP Ndx1 = 1 TO SELF.ColumnCount
+  IF NOT SELF.ColumnCount
+    SELF.Win $ SELF.FEQ{PROP:Format} =  '60L(2)|M~NO COLUMNS TO LOAD - Check separator & line endings.~L'
+    RETURN
+  END
+  LOOP Ndx1 = 1 TO SELF.ColumnCount + 1 !Add 1 extra dummy column so the last column sizes OK
     SS.Append(ColumnText)
   END
   SELF.Win $ SELF.FEQ{PROP:Format} = SS.ToString()
@@ -770,6 +787,11 @@ CurCellLen  LONG
     OF CtrlC
       SETCLIPBOARD(SELF.GetCellValue(SELF.Win $ SELF.FEQ{PROP:Selected},SELF.Win $ SELF.FEQ{PROP:Column}))
     OF MouseRight
+      CASE SELF.Win $ SELF.FEQ{PROPLIST:MouseDownField} 
+      OF 1 TO SELF.ColumnCount
+      ELSE 
+        RETURN 0
+      END
       SELF.Win $ SELF.FEQ{PROP:Selected} = SELF.FEQ{PROPLIST:MouseDownRow}
       SELF.Win $ SELF.FEQ{PROP:Column}   = SELF.FEQ{PROPLIST:MouseDownField}
       CASE SELF.Popup.Ask()

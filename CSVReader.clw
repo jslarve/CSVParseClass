@@ -49,6 +49,7 @@ SeparatorGroup   GROUP,PRE()
 Comma              STRING(',')
 Tab                STRING('<9>')
 Colon              STRING(':')
+SemiColon          STRING(';')
 Pipe               STRING('|')
 Space              STRING(' ')
                  END
@@ -61,7 +62,7 @@ Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe U
     PROMPT('Separator:'),AT(285,11),USE(?PROMPT2)
     COMBO(@s20),AT(322,9,70,12),USE(Separator),TIP('If your desired separator is' & |
         ' not listed, enter CHR(YourASCIICode) (no quotes) OR ''YourCharacter'' ' & |
-        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|Pipe|Space'),FORMAT('20L(2)|M')
+        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiColon|Pipe|Space'),FORMAT('20L(2)|M')
     OPTION('LineEnding'),AT(396,2,107,23),USE(LineEnding),BOXED
       RADIO('Windows'),AT(399,12,39),USE(?LineEndingRADIO1),TIP('Windows Style -' & |
           ' AKA 0d0ah'),VALUE('<13,10>')
