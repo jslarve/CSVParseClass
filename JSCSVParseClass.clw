@@ -769,6 +769,8 @@ RowCount    LONG
 WorkString  &STRING
 CurPos      LONG
 CurCellLen  LONG
+MouseRow    LONG
+MouseCol    LONG
 
   CODE
 
@@ -787,13 +789,15 @@ CurCellLen  LONG
     OF CtrlC
       SETCLIPBOARD(SELF.GetCellValue(SELF.Win $ SELF.FEQ{PROP:Selected},SELF.Win $ SELF.FEQ{PROP:Column}))
     OF MouseRight
-      CASE SELF.Win $ SELF.FEQ{PROPLIST:MouseDownField} 
+      MouseCol = SELF.Win $ SELF.FEQ{PROPLIST:MouseDownField} 
+      MouseRow = SELF.FEQ{PROPLIST:MouseDownRow}
+      CASE MouseCol
       OF 1 TO SELF.ColumnCount
       ELSE 
         RETURN 0
       END
-      SELF.Win $ SELF.FEQ{PROP:Selected} = SELF.FEQ{PROPLIST:MouseDownRow}
-      SELF.Win $ SELF.FEQ{PROP:Column}   = SELF.FEQ{PROPLIST:MouseDownField}
+      SELF.Win $ SELF.FEQ{PROP:Selected} = MouseRow
+      SELF.Win $ SELF.FEQ{PROP:Column}   = MouseCol
       CASE SELF.Popup.Ask()
       OF 'COPYCELL'
         SETCLIPBOARD(SELF.GetCellValue(SELF.Win $ SELF.FEQ{PROP:Selected},SELF.Win $ SELF.FEQ{PROP:Column}))         
