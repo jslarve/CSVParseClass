@@ -344,7 +344,7 @@ JSCSVParseClass.LoadFile     PROCEDURE(STRING pFileName)!,LONG          !Load a 
 !======================================================================================================================================================
 JSCSVParseClass.LoadBuffer   PROCEDURE(*STRING pBuffer)
 
-  CODE
+  CODE 
   
   FREE(SELF.Q)
   SELF.ColumnCount = 0
@@ -362,7 +362,6 @@ JSCSVParseClass.LoadBuffer   PROCEDURE(*STRING pBuffer)
   END
   SELF.SetFormatString
   SELF.DataChanged = TRUE
-
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Private method for preparing data</summary>
 !!! <returns>No Return Value</returns>
@@ -766,11 +765,13 @@ JSCSVParseClass.TakeEvent  PROCEDURE(SIGNED pEvent)
 CurColumn   LONG
 CurRow      LONG
 RowCount    LONG
-WorkString  &STRING
 CurPos      LONG
+CurPosEnd   LONG
 CurCellLen  LONG
 MouseRow    LONG
 MouseCol    LONG
+WorkString  &STRING
+WorkSize    LONG
 
   CODE
 
@@ -823,19 +824,31 @@ MouseCol    LONG
   RETURN 0
   
 CopyColumn ROUTINE
-
-  CurColumn = SELF.Win $ SELF.FEQ{PROPList:MouseDownField}
-  WorkString &= NEW STRING(SELF.GetColumnLen(CurColumn,,JSCSV:ColumnLen:Total) + (SELF.GetRowCount() * 2) - 2)
+  RowCount = SELF.GetRowCount()
+  IF NOT RowCount
+    EXIT
+  END
+  CurColumn   = SELF.Win $ SELF.FEQ{PROPList:MouseDownField}
+  WorkSize    = SELF.GetColumnLen(CurColumn,,JSCSV:ColumnLen:Total) + (RowCount * 2) - 2
+  WorkString &= NEW STRING(WorkSize)
   IF CurColumn
     CurPos = 1
-    LOOP curRow = 1 TO SELF.GetRowCount()
+    LOOP curRow = 1 TO RowCount
       CurCellLen = SELF.GetCellLen(CurRow,CurColumn)
-      WorkString[CurPos : CurPos + CurCellLen + 1] = SELF.GetCellValue(curRow,CurColumn) & CHOOSE(CurRow < SELF.GetRowCount(),'<13,10>','')
+      CurPosEnd  = CurPos + CurCellLen + 1
+      IF CurPosEnd > WorkSize   
+        IF CurPos <= WorkSize     
+          CurPosEnd = WorkSize   
+        ELSE
+          BREAK !If we somehow messed up somewhere :)
+        END
+      END
+      WorkString[CurPos : CurPosEnd] = SELF.GetCellValue(curRow,CurColumn) & '<13,10>' !The last CRLF will be truncated on the last row
       CurPos += (CurCellLen + 2)
     END
   END 
-   SETCLIPBOARD(WorkString)
-   DISPOSE(WorkString)
+  SETCLIPBOARD(WorkString)
+  DISPOSE(WorkString)
   
 CopyRow    ROUTINE
 
