@@ -33,6 +33,11 @@ Columns  &STRING  !A pseudo record of &STRING references that represent the data
    INCLUDE('KEYCODES.CLW'),ONCE
 
    MAP
+     JSCSVGetTempFileAndPathName(),STRING
+     MODULE('')
+       JSCSVGetTempPath(ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempPathA'),DLL(1) 
+       JSCSVGetTempFilename(*CSTRING,*CSTRING,ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempFileNameA'),DLL(1)
+     END
    END
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -328,13 +333,19 @@ MaxLen     LONG
 !!! <returns>Bytes loaded</returns>
 !======================================================================================================================================================
 JSCSVParseClass.LoadFile     PROCEDURE(STRING pFileName)!,LONG          !Load a file
-
+DummySS   SystemStringClass !To trick SystemString class into giving up its FILEBUFFERS=
+DummyPath CSTRING(FILE:MaxFilePath+1)
   CODE
 
   IF NOT EXISTS(CLIP(pFileName))
     RETURN 0
   END
   SELF.SS.FromFile(pFileName)
+  DummyPath = JSCSVGetTempFileAndPathName() !Create a zero byte dummy file
+  IF EXISTS(DummyPath)                      !Make sure it exists
+    DummySS.FromFile(DummyPath)             !Load it into a SystemString object
+    REMOVE(DummyPath)                       !Delete it
+  END                                       !This frees up the memory created by the previous "FILEBUFFERS=xxx" in SystemString.FromFile()
   SELF.LoadBuffer(SELF.SS.GetStringRef())
   RETURN SELF.SS.Length()
 
@@ -881,4 +892,30 @@ JSCSVParseClass.UnRegisterEvents  PROCEDURE
   UNREGISTER(EVENT:AlertKey,    ADDRESS(SELF.RegisterHandler),ADDRESS(SELF),,SELF.FEQ)
   UNREGISTER(EVENT:CloseWindow, ADDRESS(SELF.RegisterHandler),ADDRESS(SELF))
   SELF.EventsRegistered = FALSE        
+            
+!-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+JSCSVGetTempFileAndPathName  PROCEDURE
+!-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+TempFilename        STRING(259)                                      
+lpPathName          CSTRING(244)                                     
+lpPrefixString      CSTRING(4)                                       
+wUnique             ULONG                                            
+lpTempFilename      CSTRING(259)                                     
+nBufferLength       ULONG                                            
+TotalLength         ULONG                                            
+                                                                     
+  CODE                                                               
+  TempFilename   = ''                                                
+  lpPathName     = 0                                                 
+  lpPrefixString = 'JSCSV'                                              
+  wUnique        = 0                                                 
+  nBufferLength  = 243                                               
+  TotalLength = JSCSVGetTempPath(nBufferLength,lpPathName)                  
+  IF NOT TotalLength or TotalLength > 243                            
+    lpPathName = '.'                                                 
+  END                                                                
+  IF JSCSVGetTempFileName(lpPathName,lpPrefixString,wUnique,lpTempFilename)     
+    TempFilename = lpTempFilename                                    
+  END                                                                
+  RETURN(LONGPATH(CLIP(TempFilename)))
             
