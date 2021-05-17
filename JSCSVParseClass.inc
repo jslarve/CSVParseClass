@@ -31,10 +31,14 @@ OMIT('_EndOfInclude_',_JSCSVParsePresent_)
 _JSCSVParsePresent_      EQUATE(1)
                                        
 JSCSV:FirstRowIsLabels   EQUATE(01h)   !A flag to tell class that first row of CSV is for labels only.
-JSCSV:ColumnLen ITEMIZE(1),PRE()
-Max               EQUATE               !A switch for GetColumnLen - Get Max length
-Total             EQUATE               !A switch for GetColumnLen - Get Total length
-                END
+JSCSV:ColumnLen          ITEMIZE(1),PRE()
+Max                        EQUATE               !A switch for GetColumnLen - Get Max length
+Total                      EQUATE               !A switch for GetColumnLen - Get Total length
+                         END
+JSCSV:BufferStatus       ITEMIZE(0),PRE()
+NotLoaded                  EQUATE
+Loaded                     EQUATE
+                         END                
 JSCSVColumnDefGroupType  GROUP,TYPE    !Each column gets its own instance of this buffer 
 Name                       STRING(60)  !The name of the column (goes at the header)
 Flags                      LONG        !
@@ -55,9 +59,10 @@ EventsRegistered           LONG,PRIVATE                              !Are the ev
 FEQ                        LONG,PRIVATE                              !Listbox FEQ
 Win                        &WINDOW,PRIVATE                           !Owner Window
 Flags                      LONG,PRIVATE                              !Bitwise flags - such as JSCSV:FirstRowIsLabels
+KnownDelimiters            &STRING,PRIVATE                           !Known column separators for detection
 RowCount                   LONG,PRIVATE                              !Number of rows    - Calculated in ParseRows
 Separator                  CSTRING(5),PRIVATE                        !Defaults to comma separated - Use SetFileSpecs() to change.
-LineEnding                 CSTRING(5),PRIVATE                        !Defaults to CRLF (<13,10>) - Use SetFileSpecs() to change.
+LineEnding                 CSTRING(11),PRIVATE                       !Defaults to CRLF (<13,10>) - Use SetFileSpecs() to change.
 Buffer                     &STRING,PRIVATE                           !A reference to the entire contents of CSV file
 RefBuffer                  &STRING,PRIVATE                           !A reference to a string that contains individual references to all of the cells.
 ColumnDefBuffer            &STRING,PRIVATE                           !Column definition data - Contains the labels for the columns 
@@ -66,6 +71,7 @@ QPointer                   LONG,PRIVATE                              !So we don'
 Len                        LONG,PRIVATE                              !Number of bytes in the buffer (the contents of the CSV file)
 rDummy                     &STRING                                   !Null Dummy String
 SS                         &SystemStringClass,PRIVATE                !Mostly used just to load a file into the buffer. 
+BufferStatus               LONG,PRIVATE                              !
 !Public Properties  ---------------------------------------------------------------------------------------------------------
 Popup                      &PopupClass                               !Reference to an ABC Popup
 !Private Methods    ---------------------------------------------------------------------------------------------------------
@@ -82,11 +88,13 @@ VLBproc                    PROCEDURE(LONG xRow, SHORT xCol),STRING,PRIVATE !Virt
 AdjustColumnWidth          PROCEDURE(LONG pColumnp,LONG pMaxWidth=300)     !Attempt to adjust columns to data width
 Construct                  PROCEDURE                                 !Automatic Constructor
 Destruct                   PROCEDURE,VIRTUAL                         !Automatic destructor
+GetDataName                PROCEDURE(LONG pData),STRING              !Get Text name of Separators/LineEndings
 GetCellLen                 PROCEDURE(LONG pRow,LONG pColumn),LONG    !Retrieves the length of the data contained in a specific row/column
 GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),*STRING !Retrieves the data contained in a specific row/column
 GetColumnCount             PROCEDURE(),LONG                          !Retrieves the number of columns
 GetColumnLabel             PROCEDURE(LONG pColumn),STRING            !Retrieves the name of the specified column.
 GetBufferSize              PROCEDURE(),LONG                          !Gets the size of the buffer
+GetBufferStatus            PROCEDURE(),LONG                          !Gets status of the buffer (JSCSV:BufferStatus:Loaded or NotLoaded)
 GetColumnLen               PROCEDURE(LONG pColumn,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max),LONG!Gets the maximum or total width of a column
 GetMaximumColumnTextWidth  PROCEDURE(LONG pColumn,LONG pLimit=0),LONG!Gets the maximum width of a listbox column
 GetRowCount                PROCEDURE(),LONG                          !RECORDS(SELF.Q)
@@ -95,6 +103,7 @@ LoadBuffer                 PROCEDURE(*STRING pBuffer)                !Assigns th
 LoadFile                   PROCEDURE(STRING pFileName),LONG,PROC    !Load a file
 SetColumnLabel             PROCEDURE(LONG pColumn,*JSCSVColumnDefGroupType pColumnDef),VIRTUAL !Virtual method gets called when setting the labels of the columns, in case you want to customize label
 SetFileSpecs               PROCEDURE(<STRING pSeparator>,<STRING pLineEnding>,<LONG pFlags>)   !Set the CSV separator, line endings, or flags
+SetKnownDelimiters         PROCEDURE(STRING pDelimiters)                                       !Set which delimiters to search for in auto-detect
 SetListBox                 PROCEDURE(LONG pFEQ,<WINDOW pOwnerWindow>)                          !Sets the listbox used to view the data.
 TakeEvent                  PROCEDURE(LONG pEvent),LONG,PROC,VIRTUAL
 TakeProgress               PROCEDURE(LONG pProgressPct,LONG pProgress,LONG pRows),VIRTUAL

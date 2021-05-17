@@ -42,7 +42,7 @@ OMIT('***')
   END
 
 Progress1        BYTE
-LineEnding       CSTRING('<13,10>')
+LineEnding       CSTRING(11)
 Separator        CSTRING(11)
 FirstRowIsLabels BYTE(TRUE)
 SeparatorGroup   GROUP,PRE()
@@ -52,36 +52,43 @@ Colon              STRING(':')
 SemiColon          STRING(';')
 Pipe               STRING('|')
 Space              STRING(' ')
+AutoDetect         STRING('<1>')
                  END
 Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe UI',9), |
       RESIZE
-    PROGRESS,AT(5,3,173,7),USE(PROGRESS1),RANGE(0,100)
+    PROGRESS,AT(5,3,117,7),USE(PROGRESS1),RANGE(0,100)
     STRING('Progress Text'),AT(7,13,117),USE(?ProgressText)
     PROMPT('Make sure these settings are right before you open the file:'), |
-        AT(184,2,78,26),USE(?PROMPT1),FONT(,,,FONT:bold)
-    PROMPT('Separator:'),AT(285,11),USE(?PROMPT2)
-    COMBO(@s20),AT(322,9,70,12),USE(Separator),TIP('If your desired separator is' & |
+        AT(127,2,78,26),USE(?PROMPT1),FONT(,,,FONT:bold)
+    PROMPT('Separator:'),AT(215,11),USE(?PROMPT2)
+    COMBO(@s20),AT(252,9,70,12),USE(Separator),TIP('If your desired separator is' & |
         ' not listed, enter CHR(YourASCIICode) (no quotes) OR ''YourCharacter'' ' & |
-        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiColon|Pipe|Space'),FORMAT('20L(2)|M')
-    OPTION('LineEnding'),AT(396,2,107,23),USE(LineEnding),BOXED
-      RADIO('Windows'),AT(399,12,39),USE(?LineEndingRADIO1),TIP('Windows Style -' & |
+        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiColon|Pipe|Space|AutoDetect'), |
+        FORMAT('20L(2)|M')
+    OPTION('LineEnding'),AT(333,2,160,23),USE(LineEnding),BOXED
+      RADIO('Windows'),AT(336,12,39),USE(?LineEndingRADIO1),TIP('Windows Style -' & |
           ' AKA 0d0ah'),VALUE('<13,10>')
-      RADIO('Mac'),AT(443,12,24),USE(?LineEndingRADIO2),TIP('Mac Style - AKA 0dh'), |
+      RADIO('Mac'),AT(380,12,24),USE(?LineEndingRADIO2),TIP('Mac Style - AKA 0dh'), |
           VALUE('<13>')
-      RADIO('UNIX'),AT(471,12,29),USE(?LineEndingRADIO3),TIP('UNIX Style - AKA 0ah'), |
+      RADIO('UNIX'),AT(408,12,29),USE(?LineEndingRADIO3),TIP('UNIX Style - AKA 0ah'), |
           VALUE('<10>')
+      RADIO('Auto Detect'),AT(441,12,46,10),USE(?LineEndingRADIO4),TIP('Auto det' & |
+          'ect line endings'),VALUE('<0>')
     END
-    CHECK('First Row is Labels'),AT(505,12,65),USE(FirstRowIsLabels)
-    BUTTON('&Open CSV'),AT(574,4,63,20),USE(?OpenButton)
-    BUTTON('&Close'),AT(640,4,63,20),USE(?CloseButton),STD(STD:Close)
+    CHECK('First Row is Labels'),AT(502,12,65),USE(FirstRowIsLabels)
+    BUTTON('&Open CSV'),AT(576,4,40,20),USE(?OpenButton)
+    BUTTON('&Close'),AT(662,4,40,20),USE(?CloseButton),STD(STD:Close)
     LIST,AT(4,29,701,237),USE(?CSVList),HVSCROLL,COLUMN,FROM('')
+    BUTTON('&Reload CSV'),AT(619,4,40,20),USE(?ReloadButton)
   END
 
 StartTime LONG
 EndTime   LONG
 CSVFile   STRING(FILE:MaxFilePath)
+
   CODE
-  Separator = 'Comma'
+
+  Separator = 'AutoDetect'
   BIND(SeparatorGroup)
   OPEN(Window)  
   DO SizeList
@@ -111,26 +118,40 @@ CSVFile   STRING(FILE:MaxFilePath)
          DO SetSpecs
        OF ?OpenButton
          IF FILEDIALOG('Select CSV',CSVFile,'CSV Files|*.CSV|Text Files|*.TXT',FILE:KeepDir+FILE:LongName)
-           Progress1 = 0
-           DISPLAY(?PROGRESS1)
-           UNHIDE(?PROGRESS1)
-           UNHIDE(?ProgressText)
-           StartTime = CLOCK()
-           CSV.LoadFile(CSVFile)
-           EndTime = CLOCK()
-           DO SetCaption
-           HIDE(?PROGRESS1)
-           HIDE(?ProgressText)
-           CSV.AdjustColumnWidth(0)
-           SELECT(?CSVList)
+           DO LoadFile
          END
+       OF ?ReloadButton
+         DO LoadFile
        END
      END  
    END
 
+LoadFile   ROUTINE
+
+  IF NOT EXISTS(CSVFile)
+    MESSAGE('File does not exist: "' & CLIP(CSVFile) & '"')
+    EXIT
+  END
+
+  Progress1 = 0
+  DISPLAY(?PROGRESS1)
+  UNHIDE(?PROGRESS1)
+  UNHIDE(?ProgressText)
+  StartTime = CLOCK()
+  DO SetSpecs
+  CSV.LoadFile(CSVFile)
+  EndTime = CLOCK()
+  DO SetCaption
+  HIDE(?PROGRESS1)
+  HIDE(?ProgressText)
+  CSV.AdjustColumnWidth(0)
+  SELECT(?CSVList)
+
 SetCaption ROUTINE
 
-  0{PROP:Text} =  CLIP(LEFT(FORMAT(CSV.GetBufferSize() / 1024,@n20))) & ' KBytes ' & CLIP(LEFT(FORMAT(CSV.GetRowCount(),@n20))) & ' rows  ' & CLIP(LEFT(FORMAT(CSV.GetColumnCount(),@n20))) & ' columns in ' & (EndTime - StartTime) * .01 & ' seconds. [' & CLIP(CSVFile) & ']'
+  0{PROP:Text} =  CLIP(LEFT(FORMAT(CSV.GetBufferSize() / 1024,@n20))) & ' KBytes ' & CLIP(LEFT(FORMAT(CSV.GetRowCount(),@n20))) & ' rows  ' &|
+                  CLIP(LEFT(FORMAT(CSV.GetColumnCount(),@n20))) & ' columns in ' & (EndTime - StartTime) * .01 & ' seconds. [' & CLIP(CSVFile) & '][' &|
+                  CSV.GetDataName(1) & '][' & CSV.GetDataName(2) & ']'
 
 SetSpecs   ROUTINE
 

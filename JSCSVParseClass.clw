@@ -34,6 +34,7 @@ Columns  &STRING  !A pseudo record of &STRING references that represent the data
 
    MAP
      JSCSVGetTempFileAndPathName(),STRING
+     JSCSVDetectLineEnding(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>),STRING
      MODULE('')
        JSCSVGetTempPath(ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempPathA'),DLL(1) 
        JSCSVGetTempFilename(*CSTRING,*CSTRING,ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempFileNameA'),DLL(1)
@@ -85,6 +86,7 @@ JSCSVParseClass.Construct PROCEDURE
   SELF.SS         &= NEW SystemStringClass
   SELF.rDummy     &= NULL
   SELF.SetFileSpecs(',','<13,10>',JSCSV:FirstRowIsLabels) !Default to Comma separated, CRLF
+  SELF.SetKnownDelimiters(',<9>:;| ')
   SELF.ColumnCount = 1 
   SELF.RowCount    = 0 
   SELF.Popup      &= NEW PopupClass
@@ -93,7 +95,7 @@ JSCSVParseClass.Construct PROCEDURE
   SELF.Popup.AddItem('Copy Column (Excel Friendly)','COPYCOLUMN')
   SELF.Popup.AddItem('Copy Row (Excel Friendly)','COPYROW')
   SELF.Popup.AddItem('Copy Row (Original)','COPYROWCSV')
-  SELF.Popup.AddItem('Export to XML, JSON, etc.','EXPORT')
+  SELF.Popup.AddItem('Export to XML, JSON, etc.','EXPORT') 
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Automatic destructor</summary>
@@ -107,7 +109,50 @@ JSCSVParseClass.Destruct      PROCEDURE
   SELF.Popup.Kill
   DISPOSE(SELF.Popup)
   DISPOSE(SELF.SS)
+  DISPOSE(SELF.KnownDelimiters)
   !SELF.Buffer is either owned by SELF.SS OR it could be externally passed in, so we don't dispose that.
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Retrieve the name of the passed data</summary>
+!!! <param name="pData">Data to be named. 1=Separator, 2=LineEnding</param>
+!!! <returns>STRING Name</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GetDataName PROCEDURE(LONG pData)!,STRING
+ReturnVal CSTRING(21)
+
+  CODE
+  
+  CASE pData
+  OF 1
+    CASE SELF.Separator
+    OF ','
+      ReturnVal = 'Comma'
+    OF '<9>'
+      ReturnVal = 'Tab'
+    OF ':'
+      ReturnVal = 'Colon'
+    OF ';'
+      ReturnVal = 'SemiColon'
+    OF '|'
+      ReturnVal = 'Pipe'
+    OF ' '
+      ReturnVal = 'Space'
+    ELSE
+      ReturnVal = pData
+    END
+  OF 2  
+    CASE SELF.LineEnding
+    OF '<13,10>'
+      ReturnVal = 'Windows'
+    OF '<10>'
+      ReturnVal = 'UNIX'
+    OF '<13>'
+      ReturnVal = 'Mac'
+    ELSE
+      ReturnVal = pData
+    END
+  END  
+  RETURN ReturnVal
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the length of the value contained in a cell</summary>
@@ -116,7 +161,7 @@ JSCSVParseClass.Destruct      PROCEDURE
 !!! <returns>LONG value</returns>
 !======================================================================================================================================================
 JSCSVParseClass.GetCellLen   PROCEDURE(LONG pRow,LONG pColumn)!,LONG    !Retrieves the length of the data contained in a specific row/column
-rColumnInfo &JSCSVColumnInfoGroupType
+rLen        &LONG
 
   CODE
 
@@ -130,10 +175,10 @@ rColumnInfo &JSCSVColumnInfoGroupType
   CASE pColumn
   OF 1 TO SELF.ColumnCount 
     IF NOT SELF.Q.Columns &= NULL
-      rColumnInfo &= (ADDRESS(SELF.Q.Columns) + ((pColumn-1) * 8))
-      IF NOT rColumnInfo &= NULL
-        RETURN rColumnInfo.Len 
-      END  
+      rLen &= ((ADDRESS(SELF.Q.Columns) + ((pColumn-1) * 8)) + 4)
+      IF NOT rLen &= NULL
+        RETURN rLen
+      END
     END
   END
   RETURN 0
@@ -200,6 +245,16 @@ JSCSVParseClass.GetBufferSize         PROCEDURE()!,LONG
   CODE
   
   RETURN SELF.Len
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Retrieve the current status of the buffer (JSCSV:BufferStatus:Loaded or JSCSV:BufferStatus:NotLoaded) </summary>
+!!! <returns>A LONG containing the status</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GetBufferStatus       PROCEDURE()!,LONG   
+
+  CODE
+  
+  RETURN SELF.BufferStatus
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the maximum Len of a column</summary>
@@ -340,6 +395,10 @@ DummyPath CSTRING(FILE:MaxFilePath+1)
   IF NOT EXISTS(CLIP(pFileName))
     RETURN 0
   END
+  SELF.BufferStatus = JSCSV:BufferStatus:NotLoaded
+  SELF.ColumnCount = 0
+  SELF.FEQ{PROP:Format} = '31L(2)|M~Loading......~'
+  !FREE(SELF.Q)
   SELF.SS.FromFile(pFileName)
   DummyPath = JSCSVGetTempFileAndPathName() !Create a zero byte dummy file
   IF EXISTS(DummyPath)                      !Make sure it exists
@@ -360,6 +419,8 @@ JSCSVParseClass.LoadBuffer   PROCEDURE(*STRING pBuffer)
   FREE(SELF.Q)
   SELF.ColumnCount = 0
   SELF.DataChanged = TRUE
+  SELF.BufferStatus = JSCSV:BufferStatus:NotLoaded
+  SELF.FEQ{PROP:Format} = '31L(2)|M~Loading......~'
   IF SELF.FEQ
     DISPLAY(SELF.FEQ)
   END
@@ -371,7 +432,8 @@ JSCSVParseClass.LoadBuffer   PROCEDURE(*STRING pBuffer)
   ELSE
     !TODO - Need to let user know that the line endings are probably wrong.
   END
-  SELF.SetFormatString
+  SELF.SetFormatString  
+  SELF.BufferStatus = JSCSV:BufferStatus:Loaded
   SELF.DataChanged = TRUE
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Private method for preparing data</summary>
@@ -482,13 +544,16 @@ ProgressTic   LONG,AUTO !Frequency of progress display. This area needs work.
   CODE
 
   NullString        &= NULL  
-  IF SELF.RefBuffer &= NULL
-    SELF.InitColumns
-  END
-  SeparatorLen = LEN(SELF.Separator)
   Recs          = RECORDS(SELF.Q)
   IF NOT Recs
     RETURN
+  END
+  IF SELF.Separator[1] = '<1>'
+    DO DetectSeparator
+  END
+  SeparatorLen = LEN(SELF.Separator)
+  IF SELF.RefBuffer &= NULL
+    SELF.InitColumns
   END
   ProgressTic   = Recs / 50
   IF NOT ProgressTic
@@ -541,6 +606,60 @@ ProgressTic   LONG,AUTO !Frequency of progress display. This area needs work.
        SELF.TakeProgress(LineNdx1 / SELF.GetRowCount() * 100, LineNdx1, SELF.GetRowCount() )
     END
   END
+
+DetectSeparator ROUTINE
+
+  DATA
+EligibleChars BYTE,DIM(255)
+CharCount     USHORT,DIM(3,255)
+RowCount      USHORT
+  CODE
+  IF NOT Recs
+    EXIT
+  END
+  CLEAR(EligibleChars)
+  Clear(CharCount)
+  LOOP Ndx1 = 1 TO LEN(SELF.KnownDelimiters)
+    EligibleChars[ VAL(SELF.KnownDelimiters[Ndx1]) ] = TRUE
+  END
+  IF Recs => 3
+    RowCount = 3
+  ELSE
+    RowCount = SELF.RowCount
+  END
+  
+  LOOP LineNdx1 = 1 TO RowCount
+    GET(SELF.Q,LineNdx1)
+    LOOP Ndx1 = 1 TO SELF.Q.Len
+      IF SELF.Q.Line[Ndx1] = '"'
+        IF InsideQuote
+          InsideQuote = FALSE
+          CYCLE
+        ELSE
+          InsideQuote = TRUE
+          CYCLE
+        END
+      END
+      IF NOT InsideQuote
+        IF EligibleChars[VAL(SELF.Q.Line[Ndx1])]
+          CharCount[LineNdx1,VAL(SELF.Q.Line[Ndx1])] += 1
+        END  
+      END
+    END
+  END
+ 
+  LOOP Ndx1 = 1 TO LEN(SELF.KnownDelimiters)
+    IF CharCount[1, VAL(SELF.KnownDelimiters[Ndx1]) ] 
+      IF CharCount[1,VAL(SELF.KnownDelimiters[Ndx1])] = CharCount[2,VAL(SELF.KnownDelimiters[Ndx1])]
+        SELF.Separator = SELF.KnownDelimiters[Ndx1]
+        SELF.ColumnCount = CharCount[1,VAL(SELF.KnownDelimiters[Ndx1])] + 1
+        BREAK
+      END
+    END
+  END
+  InsideQuote = FALSE
+  LineNdx1 = 0
+  Ndx1 = 0
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Private method for parsing rows</summary>
@@ -555,6 +674,12 @@ LineEndingLen LONG,AUTO
 
   IF SELF.Buffer &= NULL
     RETURN 0
+  END
+  IF SELF.LineEnding = ''
+    SELF.LineEnding = JSCSVDetectLineEnding(SELF.Buffer)
+    IF SELF.LineEnding = ''
+      RETURN 0
+    END
   END
   LineEndingLen = LEN(SELF.LineEnding)
   IF SELF.GetBufferSize() < LineEndingLen
@@ -660,6 +785,22 @@ JSCSVParseClass.SetFileSpecs     PROCEDURE(<STRING pSeparator>,<STRING pLineEndi
   IF NOT OMITTED(pFlags)
     SELF.Flags = pFlags
   END
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Sets the eligible separators for auto-detecting column separators</summary>
+!!! <param name="pDelimiters">A string of unique characters that could be used as a separator</param>
+!!! <returns>Nothing</returns>
+!======================================================================================================================================================
+JSCSVParseClass.SetKnownDelimiters PROCEDURE(STRING pDelimiters)
+
+   CODE
+   
+   IF NOT LEN(pDelimiters)
+     RETURN
+   END
+   DISPOSE(SELF.KnownDelimiters)
+   SELF.KnownDelimiters &= NEW STRING(LEN(pDelimiters))
+   SELF.KnownDelimiters = pDelimiters
    
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Sets the listbox for use by class</summary>
@@ -709,6 +850,9 @@ ROW:IsQChanged   EQUATE(-3)
     
   CASE xRow
   OF ROW:GetRowCount
+    IF SELF.BufferStatus = JSCSV:BufferStatus:NotLoaded
+      RETURN 0
+    END
     IF NOT RECORDS(SELF.Q)
       RETURN 0
     END
@@ -722,7 +866,10 @@ ROW:IsQChanged   EQUATE(-3)
     END
     RETURN FALSE
   END
-  RETURN SELF.GetCellValue(xRow,xCol)
+  IF SELF.BufferStatus = JSCSV:BufferStatus:Loaded
+    RETURN SELF.GetCellValue(xRow,xCol)
+  END
+  RETURN 'Not Loaded'
     
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Virtual method that gets called when it's time to display progress</summary>
@@ -918,4 +1065,37 @@ TotalLength         ULONG
     TempFilename = lpTempFilename                                    
   END                                                                
   RETURN(LONGPATH(CLIP(TempFilename)))
+            
+!-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+JSCSVDetectLineEnding        PROCEDURE(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>)!,STRING
+!-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Ndx1       USHORT,AUTO
+Terminator CSTRING(11)
+BufferMax  LONG
+
+  CODE
+
+  IF NOT OMITTED(pDefault)    
+    Terminator = pDefault
+  END
+  BufferMax = pMaxBytes
+  IF SIZE(pBuffer) < pMaxBytes !Max record size in basic driver is 65520 bytes, so we'll test up to 0FFFFh by default - Not sure if this is a Clarion RECORD limit, or limit within the record text between line endings.
+    BufferMax = SIZE(pBuffer)    
+  END
+  
+  LOOP Ndx1 = 1 TO BufferMax-1
+    CASE pBuffer[Ndx1] 
+    OF '<10>'
+      Terminator = '<10>'
+      BREAK
+    OF '<13>'
+      IF pBuffer[Ndx1+1] = '<10>'
+        Terminator = '<13,10>'
+      ELSE
+        Terminator = '<13>'
+      END
+      BREAK
+    END
+  END
+  RETURN Terminator
             
