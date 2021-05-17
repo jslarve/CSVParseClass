@@ -611,23 +611,25 @@ DetectSeparator ROUTINE
 
   DATA
 EligibleChars BYTE,DIM(255)
-CharCount     USHORT,DIM(3,255)
+CharCount     USHORT,DIM(2,255) 
 RowCount      USHORT
   CODE
+  !This still needs work, but it appears to be operational :)
+  !Basically counts each occurrence of eligible characters within 2 rows and checks to see if the numbers match.
+  !It has worked on everything I tested it with, but needs some re-vamping
   IF NOT Recs
     EXIT
   END
   CLEAR(EligibleChars)
   Clear(CharCount)
-  LOOP Ndx1 = 1 TO LEN(SELF.KnownDelimiters)
-    EligibleChars[ VAL(SELF.KnownDelimiters[Ndx1]) ] = TRUE
+  LOOP Ndx1 = 1 TO LEN(SELF.KnownDelimiters)                !Looping through known delimiters 
+    EligibleChars[ VAL(SELF.KnownDelimiters[Ndx1]) ] = TRUE !and adding them to the lookup table of EligibleChars
   END
-  IF Recs => 3
-    RowCount = 3
+  IF Recs => 2
+    RowCount = 2
   ELSE
-    RowCount = SELF.RowCount
-  END
-  
+    RowCount = Recs
+  END 
   LOOP LineNdx1 = 1 TO RowCount
     GET(SELF.Q,LineNdx1)
     LOOP Ndx1 = 1 TO SELF.Q.Len
@@ -650,8 +652,14 @@ RowCount      USHORT
  
   LOOP Ndx1 = 1 TO LEN(SELF.KnownDelimiters)
     IF CharCount[1, VAL(SELF.KnownDelimiters[Ndx1]) ] 
-      IF CharCount[1,VAL(SELF.KnownDelimiters[Ndx1])] = CharCount[2,VAL(SELF.KnownDelimiters[Ndx1])]
-        SELF.Separator = SELF.KnownDelimiters[Ndx1]
+      IF RowCount = 2
+        IF CharCount[1,VAL(SELF.KnownDelimiters[Ndx1])] = CharCount[2,VAL(SELF.KnownDelimiters[Ndx1])]
+          SELF.Separator   = SELF.KnownDelimiters[Ndx1]
+          SELF.ColumnCount = CharCount[1,VAL(SELF.KnownDelimiters[Ndx1])] + 1
+          BREAK
+        END
+      ELSE !Do less validation because we only have one row
+        SELF.Separator   = SELF.KnownDelimiters[Ndx1]
         SELF.ColumnCount = CharCount[1,VAL(SELF.KnownDelimiters[Ndx1])] + 1
         BREAK
       END
