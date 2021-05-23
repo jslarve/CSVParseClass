@@ -14,5 +14,3 @@ There are quite a few features that I've meant to add, such as import/export of 
 Perhaps I could do a presentation on it some day. 
 
 ## NOTE: This has not been extensively tested. It works on what I've thrown at it. Usually the problem is with the wrong separator or line endings.
-
-## Regarding the SampleData folder: There is a zip file in there with more CSV files to test, but they use UNIX style line endings and I didn't want to get into git conversion issues, so they're in a zip file.
