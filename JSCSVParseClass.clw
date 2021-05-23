@@ -32,14 +32,25 @@ Columns  &STRING  !A pseudo record of &STRING references that represent the data
    INCLUDE('JSCSVParseClass.inc'),ONCE 
    INCLUDE('KEYCODES.CLW'),ONCE
 
-   MAP
-     JSCSVGetTempFileAndPathName(),STRING
-     JSCSVDetectLineEnding(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>),STRING
-     MODULE('')
-       JSCSVGetTempPath(ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempPathA'),DLL(1) 
-       JSCSVGetTempFilename(*CSTRING,*CSTRING,ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempFileNameA'),DLL(1)
-     END
-   END
+  MAP
+    JSCSVGetTempFileAndPathName(),STRING
+    JSCSVDetectLineEnding(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>),STRING
+    MODULE('')
+      JSCSVGetTempPath(ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempPathA'),DLL(1) 
+      JSCSVGetTempFilename(*CSTRING,*CSTRING,ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempFileNameA'),DLL(1)
+    END
+     
+     !Private Methods
+    InitColumns     (JSCSVParseClass pSELF),PRIVATE                         !Count columns and prepare data area to receive the references it will house
+    ParseColumns    (JSCSVParseClass pSELF),PRIVATE                         !Parses a row of CSV columns into a string of string references
+    ParseRows       (JSCSVParseClass pSELF),LONG,PRIVATE,PROC               !Parses the buffer into rows of data 
+    RegisterEvents  (JSCSVParseClass pSELF),PRIVATE                         !For use with the listbox
+    RegisterHandler (JSCSVParseClass pSELF),BYTE,PRIVATE                    !Used for REGISTER()
+    SetElementRef   (JSCSVParseClass pSELF,LONG pColumn,*STRING pDataToAssign),PRIVATE !Sets a reference for the cell of data at the current row, specified column.
+    SetFormatString (JSCSVParseClass pSELF),PRIVATE                         !Sets the format string, depending on number of columns
+    UnRegisterEvents(JSCSVParseClass pSELF),PRIVATE                         !Unregister previously registered events     
+    VLBproc         (JSCSVParseClass pSELF,LONG xRow, SHORT xCol),STRING,PRIVATE !Virtual Listbox Procedure, used to display data
+  END
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Adjusts the width of a column</summary>
@@ -395,10 +406,7 @@ DummyPath CSTRING(FILE:MaxFilePath+1)
   IF NOT EXISTS(CLIP(pFileName))
     RETURN 0
   END
-  SELF.BufferStatus = JSCSV:BufferStatus:NotLoaded
-  SELF.ColumnCount = 0
-  SELF.FEQ{PROP:Format} = '31L(2)|M~Loading......~'
-  !FREE(SELF.Q)
+  SELF.SetLoading
   SELF.SS.FromFile(pFileName)
   DummyPath = JSCSVGetTempFileAndPathName() !Create a zero byte dummy file
   IF EXISTS(DummyPath)                      !Make sure it exists
@@ -539,11 +547,11 @@ InsideQuote   BYTE,AUTO !Flag determined by whether we are currently inside a qu
 ColumnAddress LONG,AUTO !The ADDRESS() of the current SELF.Q.Columns buffer
 NullString    &STRING   !Just a NULL string to return
 Recs          LONG,AUTO !Number of records in queue
-ProgressTic   LONG,AUTO !Frequency of progress display. This area needs work.
+ProgressTic   LONG      !Frequency of progress display. This area needs work.
 
   CODE
 
-  NullString        &= NULL  
+  NullString   &= NULL  
   Recs          = RECORDS(SELF.Q)
   IF NOT Recs
     RETURN
@@ -552,6 +560,9 @@ ProgressTic   LONG,AUTO !Frequency of progress display. This area needs work.
     DO DetectSeparator
   END
   SeparatorLen = LEN(SELF.Separator)
+  IF SeparatorLen < 1
+    RETURN
+  END
   IF SELF.RefBuffer &= NULL
     SELF.InitColumns
   END
@@ -604,6 +615,7 @@ ProgressTic   LONG,AUTO !Frequency of progress display. This area needs work.
     END
     IF NOT LineNdx1 % ProgressTic
        SELF.TakeProgress(LineNdx1 / SELF.GetRowCount() * 100, LineNdx1, SELF.GetRowCount() )
+       YIELD()
     END
   END
 
@@ -844,6 +856,17 @@ Ndx  LONG
 
   SELF.SetFormatString 
   SELF.RegisterEvents
+  
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Set loading status to NotLoaded so VLB doesn't try to access buffer</summary>
+!======================================================================================================================================================
+JSCSVParseClass.SetLoading   PROCEDURE
+  
+    CODE
+
+  SELF.BufferStatus     =  JSCSV:BufferStatus:NotLoaded
+  SELF.ColumnCount      =  0
+  SELF.FEQ{PROP:Format} =  '31L(2)|M~Loading......~'
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Private method for virtual listbox</summary>
