@@ -124,6 +124,49 @@ JSCSVParseClass.Destruct      PROCEDURE
   !SELF.Buffer is either owned by SELF.SS OR it could be externally passed in, so we don't dispose that.
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Generate a BASIC file definition for current CSV</summary>
+!!! <param name="pLabel">The label of the FILE</param>
+!!! <param name="pFileName">The FILE of the file</param>
+!!! <returns>a STRING containing a FILE declaration that you can compile</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GenerateFileDef  PROCEDURE(<STRING pLabel>,<STRING pFileName>)!,STRING  !Generate a CLARION FILE declaration for the loaded CSV
+FileDef SystemStringClass
+Label    CSTRING(61)
+PRE      CSTRING(11)
+Ndx1     LONG,AUTO
+EOR      CSTRING(21)
+NameAttr CSTRING(FILE:MaxFilePath+1)
+  CODE
+
+  IF OMITTED(pLabel) OR pLabel=''
+    Label='CSVFile'
+  ELSE
+    Label = pLabel
+  END
+  PRE = SUB(pLabel,1,3)
+  CASE SELF.LineEnding
+  OF '<13,10>'
+    EOR = '2,13,10'
+  OF '<13>'
+    EOR = '1,13'
+  OF '<10>'
+    EOR = '1,10'
+  END
+  IF OMITTED(pLabel)
+    NameAttr = 'NAME(YourFileName)'
+  ELSE
+    NameAttr = 'NAME(''' & CLIP(pFileName) & ''')'
+  END
+
+  FileDef.FromString(Label & ALL(' ',35-LEN(Label)) & 'FILE,DRIVER(''BASIC'',''/COMMA=' & VAL(SELF.Separator) & ' /ENDOFRECORD=' & EOR & '''),PRE(' & PRE & '),' & NameAttr & '<13,10>RECORD {31}RECORD')
+  LOOP Ndx1 = 1 TO SELF.ColumnCount
+    FileDef.Append('<13,10>' & SELF.GetColumnLabel(Ndx1,TRUE) & ALL(' ',39-LEN(SELF.GetColumnLabel(Ndx1,TRUE))) & 'STRING(' & SELF.GetColumnLen(Ndx1) & ')')    
+  END 
+  FileDef.Append('<13,10> {37}END<13,10> {35}END<13,10>')
+  
+  RETURN FileDef.ToString()
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the name of the passed data</summary>
 !!! <param name="pData">Data to be named. 1=Separator, 2=LineEnding</param>
 !!! <returns>STRING Name</returns>
@@ -239,13 +282,26 @@ JSCSVParseClass.GetColumnCount PROCEDURE()!,LONG
 !!! <param name="pColumn">Column where label is located</param>
 !!! <returns>A STRING</returns>
 !======================================================================================================================================================
-JSCSVParseClass.GetColumnLabel        PROCEDURE(LONG pColumn)!,STRING
+JSCSVParseClass.GetColumnLabel        PROCEDURE(LONG pColumn,BYTE pForClarion=FALSE)!,STRING
 ColumnDef     &JSCSVColumnDefGroupType
-  
+ReturnName    CSTRING(61)  
+Ndx1          LONG
+LegalChars    STRING('_{47}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefghijklmnopqrstuvwxyz_{132}')
   CODE
   
-  ColumnDef &= ADDRESS(SELF.ColumnDefBuffer) + (pColumn * SIZE(JSCSVColumnDefGroupType))
-  RETURN CLIP(ColumnDef.Name)
+  ColumnDef &= ADDRESS(SELF.ColumnDefBuffer) + ((pColumn - 1) * SIZE(JSCSVColumnDefGroupType))
+  IF NOT pForClarion
+    RETURN CLIP(ColumnDef.Name)
+  END 
+  ReturnName = CLIP(ColumnDef.Name)
+  CASE ReturnName[1]
+  OF '0' TO '9'
+    ReturnName = '_' & ReturnName
+  END
+  LOOP Ndx1 = 1 TO LEN(ReturnName)
+    ReturnName[Ndx1] = LegalChars[VAL(ReturnName[Ndx1])]
+  END
+  RETURN ReturnName
  
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the number of bytes contained in the buffer (this is the size of the CSV file)</summary>
@@ -331,7 +387,7 @@ ColumnWidth LONG
     IF CurLen > MaxLen
       MaxRowNdx = Ndx1
       MaxLen    = CurLen
-      HeaderText = SELF.GetCellValue(MaxRowNdx,pColumn) 
+      HeaderText = SELF.GetCellValue(MaxRowNdx,pColumn)       
     END
   END
   StringFEQ                 =  CREATE(0,CREATE:String,0)
@@ -501,6 +557,7 @@ CountColumns ROUTINE
     IF Ndx1 > SELF.Q.Len 
       BREAK
     END
+    !Need to support double-double quotes.
     IF SELF.Q.Line[Ndx1] = '"'
       IF InsideQuote
         ColumnNameQ.Label = SELF.Q.Line[SaveNdx : Ndx1-1]
@@ -771,7 +828,7 @@ Ndx1       LONG
   END
   SELF.Win $ SELF.FEQ{PROP:Format} = SS.ToString()
   LOOP Ndx1 = 1 TO SELF.ColumnCount 
-    SELF.Win $ SELF.FEQ{PROPLIST:Header,Ndx1}  = CLIP(LEFT(SELF.GetColumnLabel(Ndx1-1))) & ' (' & Ndx1 & ')'
+    SELF.Win $ SELF.FEQ{PROPLIST:Header,Ndx1}  = CLIP(LEFT(SELF.GetColumnLabel(Ndx1))) & ' (' & Ndx1 & ')'
   END
   !To do - support multiple column properties, detect whether numeric and thus s/b right-justified, and allow user choice for various properties.
 !------------------------------------------------------------------------------------------------------------------------------------------------------

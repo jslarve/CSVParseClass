@@ -58,11 +58,12 @@ Popup                      &PopupClass                                !Reference
 AdjustColumnWidth          PROCEDURE(LONG pColumnp,LONG pMaxWidth=300)!Attempt to adjust columns to data width
 Construct                  PROCEDURE                                  !Automatic Constructor
 Destruct                   PROCEDURE,VIRTUAL                          !Automatic Destructor
+GenerateFileDef            PROCEDURE(<STRING pLabel>,<STRING pFileName>),STRING !Generate a FILE declaration for the loaded CSV
 GetDataName                PROCEDURE(LONG pData),STRING               !Get Text name of Separators/LineEndings
 GetCellLen                 PROCEDURE(LONG pRow,LONG pColumn),LONG     !Retrieves the length of the data contained in a specific row/column
 GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),*STRING  !Retrieves the data contained in a specific row/column
 GetColumnCount             PROCEDURE(),LONG                           !Retrieves the number of columns
-GetColumnLabel             PROCEDURE(LONG pColumn),STRING             !Retrieves the name of the specified column.
+GetColumnLabel             PROCEDURE(LONG pColumn,BYTE pForClarion=FALSE),STRING!Retrieves the name of the specified column.
 GetBufferSize              PROCEDURE(),LONG                           !Gets the size of the buffer
 GetBufferStatus            PROCEDURE(),LONG                           !Gets status of the buffer (JSCSV:BufferStatus:Loaded or NotLoaded)
 GetColumnLen               PROCEDURE(LONG pColumn,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max),LONG!Gets the maximum or total width of a column

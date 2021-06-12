@@ -60,26 +60,27 @@ Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe U
     STRING('Progress Text'),AT(7,13,117),USE(?ProgressText)
     PROMPT('Make sure these settings are right before you open the file:'), |
         AT(127,2,78,26),USE(?PROMPT1),FONT(,,,FONT:bold)
-    PROMPT('Separator:'),AT(215,11),USE(?PROMPT2)
-    COMBO(@s20),AT(252,9,70,12),USE(Separator),TIP('If your desired separator is' & |
+    PROMPT('Separator:'),AT(210,11),USE(?PROMPT2)
+    COMBO(@s20),AT(245,9,58,12),USE(Separator),TIP('If your desired separator is' & |
         ' not listed, enter CHR(YourASCIICode) (no quotes) OR ''YourCharacter'' ' & |
-        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiColon|Pipe|Space|AutoDetect'), |
-        FORMAT('20L(2)|M')
-    OPTION('LineEnding'),AT(333,2,160,23),USE(LineEnding),BOXED
-      RADIO('Windows'),AT(336,12,39),USE(?LineEndingRADIO1),TIP('Windows Style -' & |
+        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiColon|Pipe|Space|Auto' & |
+        'Detect'),FORMAT('20L(2)|M')
+    OPTION('LineEnding'),AT(307,2,160,23),USE(LineEnding),BOXED
+      RADIO('Windows'),AT(310,12,39),USE(?LineEndingRADIO1),TIP('Windows Style -' & |
           ' AKA 0d0ah'),VALUE('<13,10>')
-      RADIO('Mac'),AT(380,12,24),USE(?LineEndingRADIO2),TIP('Mac Style - AKA 0dh'), |
+      RADIO('Mac'),AT(354,12,24),USE(?LineEndingRADIO2),TIP('Mac Style - AKA 0dh'), |
           VALUE('<13>')
-      RADIO('UNIX'),AT(408,12,29),USE(?LineEndingRADIO3),TIP('UNIX Style - AKA 0ah'), |
+      RADIO('UNIX'),AT(382,12,29),USE(?LineEndingRADIO3),TIP('UNIX Style - AKA 0ah'), |
           VALUE('<10>')
-      RADIO('Auto Detect'),AT(441,12,46,10),USE(?LineEndingRADIO4),TIP('Auto det' & |
+      RADIO('Auto Detect'),AT(415,12,46,10),USE(?LineEndingRADIO4),TIP('Auto det' & |
           'ect line endings'),VALUE('<0>')
     END
-    CHECK('First Row is Labels'),AT(502,12,65),USE(FirstRowIsLabels)
-    BUTTON('&Open CSV'),AT(576,4,40,20),USE(?OpenButton)
-    BUTTON('&Close'),AT(662,4,40,20),USE(?CloseButton),STD(STD:Close)
+    CHECK('First Row is Labels'),AT(474,12,65),USE(FirstRowIsLabels)
+    BUTTON('Get Def'),AT(543,4,29,20),USE(?GetFileDefButton),TIP('Generate a FILE definition and copy to clipboard')
+    BUTTON('&Open'),AT(621,4,26,20),USE(?OpenButton)
+    BUTTON('&Close'),AT(679,4,26,20),USE(?CloseButton),STD(STD:Close)
     LIST,AT(4,29,701,237),USE(?CSVList),HVSCROLL,COLUMN,FROM('')
-    BUTTON('&Reload CSV'),AT(619,4,40,20),USE(?ReloadButton)
+    BUTTON('&Reload'),AT(650,4,26,20),USE(?ReloadButton)
   END
 
 StartTime LONG
@@ -122,6 +123,8 @@ CSVFile   STRING(FILE:MaxFilePath)
          END
        OF ?ReloadButton
          DO LoadFile
+       OF ?GetFileDefButton  
+         SETCLIPBOARD(CSV.GenerateFileDef('MyFile',CSVFile))        
        END
      END  
    END
