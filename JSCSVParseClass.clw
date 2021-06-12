@@ -1067,10 +1067,12 @@ JSCSVParseClass.UnRegisterEvents  PROCEDURE
   END
   
   UNREGISTER(EVENT:PreAlertKey, ADDRESS(SELF.RegisterHandler),ADDRESS(SELF),,SELF.FEQ)
-  UNREGISTER(EVENT:AlertKey,    ADDRESS(SELF.RegisterHandler),ADDRESS(SELF),,SELF.FEQ)
+  OMIT('Prevent C11.1 Crash',_C111_)
+    UNREGISTER(EVENT:AlertKey,    ADDRESS(SELF.RegisterHandler),ADDRESS(SELF),,SELF.FEQ)
+  !Prevent C11.1 Crash
   UNREGISTER(EVENT:CloseWindow, ADDRESS(SELF.RegisterHandler),ADDRESS(SELF))
   SELF.EventsRegistered = FALSE        
-            
+              
 !-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 JSCSVGetTempFileAndPathName  PROCEDURE
 !-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
