@@ -130,16 +130,17 @@ JSCSVParseClass.Destruct      PROCEDURE
 !!! <returns>a STRING containing a FILE declaration that you can compile</returns>
 !======================================================================================================================================================
 JSCSVParseClass.GenerateFileDef  PROCEDURE(<STRING pLabel>,<STRING pFileName>)!,STRING  !Generate a CLARION FILE declaration for the loaded CSV
-FileDef SystemStringClass
+FileDef  SystemStringClass
 Label    CSTRING(61)
 PRE      CSTRING(11)
 Ndx1     LONG,AUTO
 EOR      CSTRING(21)
 NameAttr CSTRING(FILE:MaxFilePath+1)
+
   CODE
 
   IF OMITTED(pLabel) OR pLabel=''
-    Label='CSVFile'
+    Label = 'CSVFile'
   ELSE
     Label = pLabel
   END
@@ -160,7 +161,8 @@ NameAttr CSTRING(FILE:MaxFilePath+1)
 
   FileDef.FromString(Label & ALL(' ',35-LEN(Label)) & 'FILE,DRIVER(''BASIC'',''/COMMA=' & VAL(SELF.Separator) & ' /ENDOFRECORD=' & EOR & '''),PRE(' & PRE & '),' & NameAttr & '<13,10>RECORD {31}RECORD')
   LOOP Ndx1 = 1 TO SELF.ColumnCount
-    FileDef.Append('<13,10>' & SELF.GetColumnLabel(Ndx1,TRUE) & ALL(' ',39-LEN(SELF.GetColumnLabel(Ndx1,TRUE))) & 'STRING(' & SELF.GetColumnLen(Ndx1) & ')')    
+    Label = SELF.GetColumnLabel(Ndx1,TRUE)
+    FileDef.Append('<13,10>' & Label & ALL(' ',39-LEN(Label)) & 'STRING(' & SELF.GetColumnLen(Ndx1) & ')')    
   END 
   FileDef.Append('<13,10> {37}END<13,10> {35}END<13,10>')
   
@@ -288,6 +290,15 @@ ReturnName    CSTRING(61)
 Ndx1          LONG
 LegalChars    STRING('_{47}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefghijklmnopqrstuvwxyz_{132}')
   CODE
+
+  CASE pColumn
+  OF 1 TO SELF.ColumnCount
+  ELSE
+    RETURN ''
+  END
+  IF SELF.ColumnDefBuffer &= NULL
+    RETURN ''
+  END
   
   ColumnDef &= ADDRESS(SELF.ColumnDefBuffer) + ((pColumn - 1) * SIZE(JSCSVColumnDefGroupType))
   IF NOT pForClarion

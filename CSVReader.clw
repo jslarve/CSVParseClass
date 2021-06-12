@@ -75,12 +75,17 @@ Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe U
       RADIO('Auto Detect'),AT(415,12,46,10),USE(?LineEndingRADIO4),TIP('Auto det' & |
           'ect line endings'),VALUE('<0>')
     END
-    CHECK('First Row is Labels'),AT(474,12,65),USE(FirstRowIsLabels)
-    BUTTON('Get Def'),AT(543,4,29,20),USE(?GetFileDefButton),TIP('Generate a FILE definition and copy to clipboard')
-    BUTTON('&Open'),AT(621,4,26,20),USE(?OpenButton)
-    BUTTON('&Close'),AT(679,4,26,20),USE(?CloseButton),STD(STD:Close)
+    CHECK('First Row is Labels'),AT(474,12,65),USE(FirstRowIsLabels),TIP('First ' & |
+        'row of the CSV contains the label of each column.')
+    BUTTON('Get Def'),AT(543,4,29,20),USE(?GetFileDefButton),TIP('Generate a Clarion FIL' & |
+        'E definition and copy to clipboard and paste into another app')
+    BUTTON('To SQL'),AT(575,4,29,20),USE(?ToSQLButton),TIP('Generate SQL script')
+    BUTTON('&Open'),AT(621,4,26,20),USE(?OpenButton),TIP('Open a CSV file')
+    BUTTON('&Close'),AT(679,4,26,20),USE(?CloseButton),STD(STD:Close), |
+        TIP('Exit the application.')
     LIST,AT(4,29,701,237),USE(?CSVList),HVSCROLL,COLUMN,FROM('')
-    BUTTON('&Reload'),AT(650,4,26,20),USE(?ReloadButton)
+    BUTTON('&Reload'),AT(650,4,26,20),USE(?ReloadButton),TIP('Reload the current' & |
+        ' CSV file from disk.')
   END
 
 StartTime LONG
@@ -124,7 +129,9 @@ CSVFile   STRING(FILE:MaxFilePath)
        OF ?ReloadButton
          DO LoadFile
        OF ?GetFileDefButton  
-         SETCLIPBOARD(CSV.GenerateFileDef('MyFile',CSVFile))        
+         SETCLIPBOARD(CSV.GenerateFileDef('MyFile',CSVFile))       
+       OF ?ToSQLButton
+         MESSAGE('This is under development')
        END
      END  
    END
