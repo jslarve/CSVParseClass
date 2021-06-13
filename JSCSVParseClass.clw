@@ -288,7 +288,7 @@ JSCSVParseClass.GetColumnLabel        PROCEDURE(LONG pColumn,BYTE pForClarion=FA
 ColumnDef     &JSCSVColumnDefGroupType
 ReturnName    CSTRING(61)  
 Ndx1          LONG
-LegalChars    STRING('_{47}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefghijklmnopqrstuvwxyz_{132}')
+LegalChars    STRING('_{48}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefghijklmnopqrstuvwxyz_{5}E__f_{10}Z_{15}zY_{5}Y_{26}AAAAAA_CEEEEIIIIDNOOOOOx0UUUUYPBaaaaaa_ceeeeiiiionooooo_ouuuuypy')
   CODE
 
   CASE pColumn
@@ -310,7 +310,7 @@ LegalChars    STRING('_{47}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefgh
     ReturnName = '_' & ReturnName
   END
   LOOP Ndx1 = 1 TO LEN(ReturnName)
-    ReturnName[Ndx1] = LegalChars[VAL(ReturnName[Ndx1])]
+    ReturnName[Ndx1] = LegalChars[VAL(ReturnName[Ndx1])+1]
   END
   RETURN ReturnName
  
