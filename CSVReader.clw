@@ -58,8 +58,6 @@ Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe U
       RESIZE
     PROGRESS,AT(5,3,117,7),USE(PROGRESS1),RANGE(0,100)
     STRING('Progress Text'),AT(7,13,117),USE(?ProgressText)
-    PROMPT('Make sure these settings are right before you open the file:'), |
-        AT(127,2,78,26),USE(?PROMPT1),FONT(,,,FONT:bold)
     PROMPT('Separator:'),AT(210,11),USE(?PROMPT2)
     COMBO(@s20),AT(245,9,58,12),USE(Separator),TIP('If your desired separator is' & |
         ' not listed, enter CHR(YourASCIICode) (no quotes) OR ''YourCharacter'' ' & |
@@ -75,11 +73,10 @@ Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe U
       RADIO('Auto Detect'),AT(415,12,46,10),USE(?LineEndingRADIO4),TIP('Auto det' & |
           'ect line endings'),VALUE('<0>')
     END
-    CHECK('First Row is Labels'),AT(474,12,65),USE(FirstRowIsLabels),TIP('First ' & |
+    CHECK('First Row is Labels'),AT(474,10,65),USE(FirstRowIsLabels),TIP('First ' & |
         'row of the CSV contains the label of each column.')
-    BUTTON('Get Def'),AT(543,4,29,20),USE(?GetFileDefButton),TIP('Generate a Clarion FIL' & |
-        'E definition and copy to clipboard and paste into another app')
-    BUTTON('To SQL'),AT(575,4,29,20),USE(?ToSQLButton),TIP('Generate SQL script')
+    BUTTON('Gen Clarion Structure'),AT(545,4,73,20),USE(?GenerateClarionStructureButton) |
+        ,TIP('Generate a Clarion structure that can be compiled in another program.')
     BUTTON('&Open'),AT(621,4,26,20),USE(?OpenButton),TIP('Open a CSV file')
     BUTTON('&Close'),AT(679,4,26,20),USE(?CloseButton),STD(STD:Close), |
         TIP('Exit the application.')
@@ -112,7 +109,6 @@ CSVFile   STRING(FILE:MaxFilePath)
            HIDE(?PROGRESS1)
            HIDE(?ProgressText)
            EndTime = CLOCK()
-           CSV.AdjustColumnWidth(0)
            DO SetCaption
          ELSE
            MESSAGE('"' & CLIP(CSVFile) & '" was not loaded.')
@@ -128,10 +124,15 @@ CSVFile   STRING(FILE:MaxFilePath)
          END
        OF ?ReloadButton
          DO LoadFile
-       OF ?GetFileDefButton  
-         SETCLIPBOARD(CSV.GenerateFileDef('MyFile',CSVFile))       
-       OF ?ToSQLButton
-         MESSAGE('This is under development')
+       OF ?GenerateClarionStructureButton  
+         CASE MESSAGE('What do you want to generate to your Windows clipboard for pasting into your app?','Generate Clarion Structure',ICON:Question,'File|Queue|Group|Cancel')
+         OF 1
+           SETCLIPBOARD(CSV.GenerateFileDef('MyFile',CSVFile))       
+         OF 2
+           SETCLIPBOARD(CSV.GenerateClarionStructure('MyQueue','QUEUE','My'))       
+         OF 3
+           SETCLIPBOARD(CSV.GenerateClarionStructure('MyGroup','GROUP','My'))       
+         END  
        END
      END  
    END
@@ -154,7 +155,6 @@ LoadFile   ROUTINE
   DO SetCaption
   HIDE(?PROGRESS1)
   HIDE(?ProgressText)
-  CSV.AdjustColumnWidth(0)
   SELECT(?CSVList)
 
 SetCaption ROUTINE

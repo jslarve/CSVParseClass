@@ -42,6 +42,7 @@ Columns  &STRING  !A pseudo record of &STRING references that represent the data
      
      !Private Methods
     InitColumns     (JSCSVParseClass pSELF),PRIVATE                         !Count columns and prepare data area to receive the references it will house
+    InitPopup       (JSCSVParseCLass pSELF),PRIVATE                         !Initializes the popup class if a listbox is in use
     ParseColumns    (JSCSVParseClass pSELF),PRIVATE                         !Parses a row of CSV columns into a string of string references
     ParseRows       (JSCSVParseClass pSELF),LONG,PRIVATE,PROC               !Parses the buffer into rows of data 
     RegisterEvents  (JSCSVParseClass pSELF),PRIVATE                         !For use with the listbox
@@ -96,17 +97,11 @@ JSCSVParseClass.Construct PROCEDURE
   SELF.Q          &= NEW JSCSVQ
   SELF.SS         &= NEW SystemStringClass
   SELF.rDummy     &= NULL
-  SELF.SetFileSpecs(',','<13,10>',JSCSV:FirstRowIsLabels) !Default to Comma separated, CRLF
+  SELF.SetFileSpecs('<1>','',JSCSV:FirstRowIsLabels) !Default to Autodetect
   SELF.SetKnownDelimiters(',<9>:;| ')
   SELF.ColumnCount = 1 
   SELF.RowCount    = 0 
-  SELF.Popup      &= NEW PopupClass
-  SELF.Popup.Init()
-  SELF.Popup.AddItem('Copy Cell','COPYCELL')
-  SELF.Popup.AddItem('Copy Column (Excel Friendly)','COPYCOLUMN')
-  SELF.Popup.AddItem('Copy Row (Excel Friendly)','COPYROW')
-  SELF.Popup.AddItem('Copy Row (Original)','COPYROWCSV')
-  SELF.Popup.AddItem('Export to XML, JSON, etc.','EXPORT') 
+  SELF.Popup      &= NULL !This gets initialized when listbox is assigned
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Automatic destructor</summary>
@@ -117,8 +112,10 @@ JSCSVParseClass.Destruct      PROCEDURE
   
   DISPOSE(SELF.RefBuffer)
   DISPOSE(SELF.Q)
-  SELF.Popup.Kill
-  DISPOSE(SELF.Popup)
+  IF NOT SELF.Popup &= NULL
+    SELF.Popup.Kill
+    DISPOSE(SELF.Popup)
+  END  
   DISPOSE(SELF.SS)
   DISPOSE(SELF.KnownDelimiters)
   !SELF.Buffer is either owned by SELF.SS OR it could be externally passed in, so we don't dispose that.
@@ -159,14 +156,32 @@ NameAttr CSTRING(FILE:MaxFilePath+1)
     NameAttr = 'NAME(''' & CLIP(pFileName) & ''')'
   END
 
-  FileDef.FromString(Label & ALL(' ',35-LEN(Label)) & 'FILE,DRIVER(''BASIC'',''/COMMA=' & VAL(SELF.Separator) & ' /ENDOFRECORD=' & EOR & '''),PRE(' & PRE & '),' & NameAttr & '<13,10>RECORD {31}RECORD')
-  LOOP Ndx1 = 1 TO SELF.ColumnCount
-    Label = SELF.GetColumnLabel(Ndx1,TRUE)
-    FileDef.Append('<13,10>' & Label & ALL(' ',39-LEN(Label)) & 'STRING(' & SELF.GetColumnLen(Ndx1) & ')')    
-  END 
-  FileDef.Append('<13,10> {37}END<13,10> {35}END<13,10>')
+  FileDef.FromString(Label & ALL(' ',35-LEN(Label)) & 'FILE,DRIVER(''BASIC'',''/COMMA=' & VAL(SELF.Separator) & ' /ENDOFRECORD=' & EOR & '''),PRE(' & PRE & '),' & NameAttr & '<13,10>' &  SELF.GenerateClarionStructure('RECORD','RECORD') & '<13,10> {35}END<13,10>')
   
   RETURN FileDef.ToString()
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Generate a Clarion structure to receive current CSV</summary>
+!!! <param name="pLabel">The label of the structure</param>
+!!! <param name="pType">RECORD, QUEUE, or GROUP would be typical</param>
+!!! <param name="pPre">A prefix (optional)</param>
+!!! <returns>a STRING containing a structure declaration that you can compile</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GenerateClarionStructure PROCEDURE(STRING pLabel,STRING pType,<STRING pPre>)!,STRING
+Label    CSTRING(61)
+Ndx1     LONG,AUTO
+StructureDef SystemStringClass
+  CODE
+  StructureDef.FromString(pLabel & ALL(' ',37-LEN(pLabel)) & pType)
+  IF NOT OMITTED(pPre)
+    StructureDef.Append(',PRE(' & pPre & ')')
+  END
+  LOOP Ndx1 = 1 TO SELF.ColumnCount
+    Label = SELF.GetColumnLabel(Ndx1,TRUE)
+    StructureDef.Append('<13,10>' & Label & ALL(' ',39-LEN(Label)) & 'STRING(' & SELF.GetColumnLen(Ndx1) & ')')    
+  END 
+  StructureDef.Append('<13,10> {37}END')
+  RETURN StructureDef.ToString()
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the name of the passed data</summary>
@@ -402,6 +417,7 @@ ColumnWidth LONG
     END
   END
   StringFEQ                 =  CREATE(0,CREATE:String,0)
+  StringFEQ{PROP:NoWidth  } =  TRUE
   StringFEQ{PROP:FontName } =  SELF.FEQ{PROP:FontName}
   StringFEQ{PROP:FontSize } =  SELF.FEQ{PROP:FontSize}
   StringFEQ{PROP:FontStyle} =  SELF.FEQ{PROP:FontStyle}
@@ -459,6 +475,22 @@ MaxLen     LONG
     END
   END
   RETURN MaxLen
+
+JSCSVParseClass.InitPopup   PROCEDURE
+
+  CODE
+  
+  IF NOT SELF.Popup &= NULL
+    RETURN
+  END
+  
+  SELF.Popup      &= NEW PopupClass
+  SELF.Popup.Init()
+  SELF.Popup.AddItem('Copy Cell','COPYCELL')
+  SELF.Popup.AddItem('Copy Column (Excel Friendly)','COPYCOLUMN')
+  SELF.Popup.AddItem('Copy Row (Excel Friendly)','COPYROW')
+  SELF.Popup.AddItem('Copy Row (Original)','COPYROWCSV')
+  SELF.Popup.AddItem('Export to XML, JSON, etc.','EXPORT')  
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Load a Delimiter Separated File</summary>
@@ -818,10 +850,10 @@ rColumnData &JSCSVColumnDataGroupType
 !!! <returns>no return value</returns>
 !======================================================================================================================================================
 JSCSVParseClass.SetFormatString PROCEDURE
-ColumnText EQUATE('60L(2)|M~ ~C')
+ColumnText EQUATE('0L(2)|M~ ~C')
 SS         SystemStringClass
 Ndx1       LONG
-
+SavePixels BYTE
    CODE
    
   IF SELF.Win &= NULL
@@ -834,13 +866,18 @@ Ndx1       LONG
     SELF.Win $ SELF.FEQ{PROP:Format} =  '60L(2)|M~NO COLUMNS TO LOAD - Check separator & line endings.~L'
     RETURN
   END
-  LOOP Ndx1 = 1 TO SELF.ColumnCount + 1 !Add 1 extra dummy column so the last column sizes OK
+  SavePixels = SELF.Win{PROP:Pixels}
+  SELF.Win{PROP:Pixels} = TRUE
+  LOOP Ndx1 = 1 TO SELF.ColumnCount 
     SS.Append(ColumnText)
-  END
+  END 
+  SS.Append('60L(2)|M~ ~C') !Add 1 extra dummy column so the last column sizes OK
   SELF.Win $ SELF.FEQ{PROP:Format} = SS.ToString()
   LOOP Ndx1 = 1 TO SELF.ColumnCount 
     SELF.Win $ SELF.FEQ{PROPLIST:Header,Ndx1}  = CLIP(LEFT(SELF.GetColumnLabel(Ndx1))) & ' (' & Ndx1 & ')'
+    SELF.AdjustColumnWidth(Ndx1)
   END
+  SELF.Win{PROP:Pixels} = SavePixels
   !To do - support multiple column properties, detect whether numeric and thus s/b right-justified, and allow user choice for various properties.
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Virtual Method</summary>
@@ -924,6 +961,7 @@ Ndx  LONG
 
   SELF.SetFormatString 
   SELF.RegisterEvents
+  SELF.InitPopup
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Set loading status to NotLoaded so VLB doesn't try to access buffer</summary>

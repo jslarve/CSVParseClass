@@ -59,6 +59,7 @@ AdjustColumnWidth          PROCEDURE(LONG pColumnp,LONG pMaxWidth=300)!Attempt t
 Construct                  PROCEDURE                                  !Automatic Constructor
 Destruct                   PROCEDURE,VIRTUAL                          !Automatic Destructor
 GenerateFileDef            PROCEDURE(<STRING pLabel>,<STRING pFileName>),STRING !Generate a FILE declaration for the loaded CSV
+GenerateClarionStructure   PROCEDURE(STRING pLabel,STRING pType,<STRING pPre>),STRING !Generate a Clarion structure, such as RECORD, GROUP, or QUEUE.
 GetDataName                PROCEDURE(LONG pData),STRING               !Get Text name of Separators/LineEndings
 GetCellLen                 PROCEDURE(LONG pRow,LONG pColumn),LONG     !Retrieves the length of the data contained in a specific row/column
 GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),*STRING  !Retrieves the data contained in a specific row/column
