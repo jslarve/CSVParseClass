@@ -25,7 +25,7 @@
 
 * CSVReader.sln demonstrates the UI.
 * CSVReaderST.sln also demonstrates the UI, but does the loading of the file with StringTheory.
-* SimpleCSVProcess.sln is a bare bones simple example of how to fill your own queue with data from the CSV.
+* SimpleCSVProcess.sln is a bare bones simple example of how to fill your own queue with data from the CSV. Now it also demonstrates the locating of a column to match to queue.
 
 #### TODO
 
