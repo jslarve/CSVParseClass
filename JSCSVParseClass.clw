@@ -22,12 +22,18 @@
 !OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 !SOFTWARE.
 
+JSCSVColumnDefQueueType  QUEUE,TYPE    !Each column gets its own record of this buffer 
+Name                       CSTRING(61) !The name of the column (goes at the header)
+Name_Sort                  CSTRING(61) !For non-case-sensitivity
+Flags                      LONG        !Bitmap not currently used
+                         END           !
 
-JSCSVQ  QUEUE,TYPE
-Len       LONG    !Size of the &STRING in the Line column, so we don't have to keep calling LEN().
-Line     &STRING  !A direct reference to a particular row of the original CSV buffer (not new'd)
-Columns  &STRING  !A pseudo record of &STRING references that represent the data inside the Line column above. This reference is part of SELF.Refbuffer.
-        END
+
+JSCSVQ                   QUEUE,TYPE
+Len                        LONG        !Size of the &STRING in the Line column, so we don't have to keep calling LEN().
+Line                      &STRING      !A direct reference to a particular row of the original CSV buffer (not new'd)
+Columns                   &STRING      !A pseudo record of &STRING references that represent the data inside the Line column above. This reference is part of SELF.Refbuffer.
+                         END
    
    INCLUDE('JSCSVParseClass.inc'),ONCE 
    INCLUDE('KEYCODES.CLW'),ONCE
@@ -95,8 +101,9 @@ JSCSVParseClass.Construct PROCEDURE
   SELF.Buffer     &= NULL
   SELF.RefBuffer  &= NULL
   SELF.Q          &= NEW JSCSVQ
+  SELF.ColumnDefQ &= NEW JSCSVColumnDefQueueType
   SELF.SS         &= NEW SystemStringClass
-  SELF.rDummy     &= NULL
+  SELF.rDummy     &= NEW STRING(1)
   SELF.SetFileSpecs('<1>','',JSCSV:FirstRowIsLabels) !Default to Autodetect
   SELF.SetKnownDelimiters(',<9>:;| ')
   SELF.ColumnCount = 1 
@@ -110,8 +117,10 @@ JSCSVParseClass.Destruct      PROCEDURE
 
   CODE
   
+  DISPOSE(SELF.rDummy)
   DISPOSE(SELF.RefBuffer)
   DISPOSE(SELF.Q)
+  DISPOSE(SELF.ColumnDefQ)
   IF NOT SELF.Popup &= NULL
     SELF.Popup.Kill
     DISPOSE(SELF.Popup)
@@ -300,7 +309,6 @@ JSCSVParseClass.GetColumnCount PROCEDURE()!,LONG
 !!! <returns>A STRING</returns>
 !======================================================================================================================================================
 JSCSVParseClass.GetColumnLabel        PROCEDURE(LONG pColumn,BYTE pForClarion=FALSE)!,STRING
-ColumnDef     &JSCSVColumnDefGroupType
 ReturnName    CSTRING(61)  
 Ndx1          LONG
 LegalChars    STRING('_{48}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefghijklmnopqrstuvwxyz_{5}E__f_{10}Z_{15}zY_{5}Y_{26}AAAAAA_CEEEEIIIIDNOOOOOx0UUUUYPBaaaaaa_ceeeeiiiionooooo_ouuuuypy')
@@ -311,15 +319,11 @@ LegalChars    STRING('_{48}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefgh
   ELSE
     RETURN ''
   END
-  IF SELF.ColumnDefBuffer &= NULL
-    RETURN ''
-  END
-  
-  ColumnDef &= ADDRESS(SELF.ColumnDefBuffer) + ((pColumn - 1) * SIZE(JSCSVColumnDefGroupType))
+  GET(SELF.ColumnDefQ,pColumn)
+  ReturnName = CHOOSE(NOT ERRORCODE(),SELF.ColumnDefQ.Name,'')   
   IF NOT pForClarion
-    RETURN CLIP(ColumnDef.Name)
+    RETURN ReturnName
   END 
-  ReturnName = CLIP(ColumnDef.Name)
   CASE ReturnName[1]
   OF '0' TO '9'
     ReturnName = '_' & ReturnName
@@ -328,6 +332,31 @@ LegalChars    STRING('_{48}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefgh
     ReturnName[Ndx1] = LegalChars[VAL(ReturnName[Ndx1])+1]
   END
   RETURN ReturnName
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Retrieve the number of a column, based on its column name</summary>
+!!! <param name="pName">Name of the column</param>
+!!! <returns>LONG containing the column number, or zero</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GetColumnNumber            PROCEDURE(STRING pName)!,LONG
+ReturnVal LONG
+Ndx1      LONG,AUTO
+  CODE
+  
+  SELF.ColumnDefQ.Name_Sort = UPPER(pName)
+  GET(SELF.ColumnDefQ,SELF.ColumnDefQ.Name_Sort)
+  IF NOT ERRORCODE()
+    ReturnVal = POINTER(SELF.ColumnDefQ)
+  ELSE
+    LOOP Ndx1 = 1 TO RECORDS(SELF.ColumnDefQ)
+      GET(SELF.ColumnDefQ, Ndx1)
+      IF MATCH(SELF.ColumnDefQ.Name_Sort,'*' & UPPER(pName) & '*',Match:Wild)
+        ReturnVal = Ndx1
+        BREAK
+      END
+    END
+  END
+  RETURN ReturnVal
  
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the number of bytes contained in the buffer (this is the size of the CSV file)</summary>
@@ -434,6 +463,27 @@ ColumnWidth LONG
   RETURN ColumnWidth
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Retrieve the amount of memory used to load the current file</summary>
+!!! <param name="pWhich">Bitwise: 01h to get the CSV size, 02h to get Reference Size, and 04h for queue overhead. Combine those flags as desired.</param>
+!!! <returns>A LONG</returns>
+!======================================================================================================================================================
+JSCSVParseClass.GetMemoryUsed              PROCEDURE(LONG pWhich)!,LONG
+ReturnVal LONG
+
+  CODE
+
+  IF BAND(pWhich,1) !The size of the CSV file itself
+    ReturnVal += SIZE(SELF.Buffer)    
+  END  
+  IF BAND(pWhich,2) !The size of all of the &STRINGs for every cell
+    ReturnVal += SIZE(SELF.RefBuffer)
+  END
+  IF BAND(pWhich,4) !Queue overhead
+    ReturnVal += ((SIZE(JSCSVQ) + 12) * SELF.RowCount) 
+  END
+  
+  RETURN ReturnVal
+!------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Retrieve the number of rows contained in the CSV file</summary>
 !!! <returns>A LONG containing the value</returns>
 !======================================================================================================================================================
@@ -532,9 +582,10 @@ JSCSVParseClass.LoadBuffer   PROCEDURE(*STRING pBuffer)
     DISPLAY(SELF.FEQ)
   END
   DISPOSE(SELF.RefBuffer)
-  SELF.Buffer &= pBuffer
-  SELF.Len     = SIZE(pBuffer)
-  IF SELF.ParseRows()
+  SELF.Buffer  &= pBuffer
+  SELF.Len      = SIZE(pBuffer)
+  SELF.RowCount = SELF.ParseRows()
+  IF SELF.RowCount
     SELF.ParseColumns()
   ELSE
     !TODO - Need to let user know that the line endings are probably wrong.
@@ -552,22 +603,16 @@ SaveNdx       LONG,AUTO
 SeparatorLen  LONG,AUTO
 ColumnCount   LONG,AUTO
 InsideQuote   BYTE
-ColumnDef     &JSCSVColumnDefGroupType
-ColumnNameQ   QUEUE
-Label           STRING(60)
-              END
 
   CODE
   
   SeparatorLen = LEN(SELF.Separator)
   DISPOSE(SELF.RefBuffer)
-  DISPOSE(SELF.ColumnDefBuffer)
+  FREE(SELF.ColumnDefQ)
 
   DO CountColumns
 
   IF SELF.ColumnCount > 0
-     SELF.ColumnDefBuffer &= NEW STRING(SELF.ColumnCount * SIZE(JSCSVColumnDefGroupType) )
-     CLEAR(SELF.ColumnDefBuffer,-1)
      SELF.RefBuffer &= NEW STRING(SELF.ColumnCount * 8 * RECORDS(SELF.Q))
      CLEAR(SELF.RefBuffer,-1)
      DO LabelColumns
@@ -575,15 +620,10 @@ Label           STRING(60)
 
 LabelColumns ROUTINE
 
-  LOOP Ndx1 = 0 TO SELF.ColumnCount - 1
-    ColumnDef &= ADDRESS(SELF.ColumnDefBuffer) + (Ndx1 * SIZE(JSCSVColumnDefGroupType))
-    IF NOT BAND(SELF.Flags,JSCSV:FirstRowIsLabels)
-      ColumnDef.Name = 'Column ' & Ndx1 + 1
-    ELSE
-      GET(ColumnNameQ,Ndx1+1)
-      ColumnDef.Name = ColumnNameQ.Label
+  IF NOT BAND(SELF.Flags,JSCSV:FirstRowIsLabels)
+    LOOP Ndx1 = 1 TO SELF.ColumnCount 
+      SELF.SetColumnLabel(Ndx1,'Column ' & Ndx1)
     END
-    SELF.SetColumnLabel(Ndx1+1,ColumnDef)
   END
 
 CountColumns ROUTINE
@@ -603,8 +643,7 @@ CountColumns ROUTINE
     !Need to support double-double quotes.
     IF SELF.Q.Line[Ndx1] = '"'
       IF InsideQuote
-        ColumnNameQ.Label = SELF.Q.Line[SaveNdx : Ndx1-1]
-        ADD(ColumnNameQ)
+        SELF.SetColumnLabel(0, SELF.Q.Line[SaveNdx : Ndx1-1])
         SaveNdx      = Ndx1 + SeparatorLen + 1
         IF Ndx1 < SELF.Q.Len
           Ndx1        += 1
@@ -620,13 +659,11 @@ CountColumns ROUTINE
     END
     IF NOT InsideQuote
       IF (SELF.Q.Line[Ndx1 : Ndx1 + SeparatorLen - 1] = SELF.Separator) 
-        ColumnNameQ.Label = SELF.Q.Line[SaveNdx : Ndx1 - 1]
-        ADD(ColumnNameQ)
+        SELF.SetColumnLabel(0, SELF.Q.Line[SaveNdx : Ndx1-1])
         SaveNdx      = Ndx1 + 1
         ColumnCount += 1
       ELSIF (Ndx1 => SELF.Q.Len)  
-        ColumnNameQ.Label = SELF.Q.Line[SaveNdx : Ndx1]
-        ADD(ColumnNameQ)
+        SELF.SetColumnLabel(0, SELF.Q.Line[SaveNdx : Ndx1])
         BREAK
       END
     END  
@@ -882,11 +919,28 @@ SavePixels BYTE
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Virtual Method</summary>
 !======================================================================================================================================================
-JSCSVParseClass.SetColumnLabel   PROCEDURE(LONG pColumn,*JSCSVColumnDefGroupType pColumnDef)!,VIRTUAL
+JSCSVParseClass.SetColumnLabel   PROCEDURE(LONG pColumn,STRING pLabel)!LONG,VIRTUAL
 
    CODE
    
-   !Virtual Method - If you derive it, you can override pColumnDef.Name and other properties in the future.
+  IF pColumn = 0 !Add new record
+    CLEAR(SELF.ColumnDefQ)
+    DO AssignValues
+    ADD(SELF.ColumnDefQ)  
+  ELSE   
+    GET(SELF.ColumnDefQ,pColumn)
+    IF NOT ERRORCODE()
+      DO AssignValues
+      PUT(SELF.ColumnDefQ)
+    END
+  END  
+  RETURN POINTER(SELF.ColumnDefQ)
+  
+AssignValues ROUTINE
+
+  SELF.ColumnDefQ.Name      = pLabel
+  SELF.ColumnDefQ.Name_Sort = UPPER(SELF.ColumnDefQ.Name)
+
   
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Sets the CSV file specs</summary>

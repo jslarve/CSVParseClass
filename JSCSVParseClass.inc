@@ -39,10 +39,6 @@ JSCSV:BufferStatus       ITEMIZE(0),PRE()
 NotLoaded                  EQUATE
 Loaded                     EQUATE
                          END                
-JSCSVColumnDefGroupType  GROUP,TYPE    !Each column gets its own instance of this buffer 
-Name                       STRING(60)  !The name of the column (goes at the header)
-Flags                      LONG        !
-                         END           !
 JSCSVColumnDataGroupType GROUP,TYPE    !A structure for accessing the individual cells of data
 Data                       &STRING     !A reference to the actual data for a cell
                          END           !              
@@ -65,15 +61,17 @@ GetCellLen                 PROCEDURE(LONG pRow,LONG pColumn),LONG     !Retrieves
 GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),*STRING  !Retrieves the data contained in a specific row/column
 GetColumnCount             PROCEDURE(),LONG                           !Retrieves the number of columns
 GetColumnLabel             PROCEDURE(LONG pColumn,BYTE pForClarion=FALSE),STRING!Retrieves the name of the specified column.
+GetColumnNumber            PROCEDURE(STRING pName),LONG
 GetBufferSize              PROCEDURE(),LONG                           !Gets the size of the buffer
 GetBufferStatus            PROCEDURE(),LONG                           !Gets status of the buffer (JSCSV:BufferStatus:Loaded or NotLoaded)
 GetColumnLen               PROCEDURE(LONG pColumn,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max),LONG!Gets the maximum or total width of a column
 GetMaximumColumnTextWidth  PROCEDURE(LONG pColumn,LONG pLimit=0),LONG !Gets the maximum width of a listbox column
+GetMemoryUsed              PROCEDURE(LONG pWhich),LONG
 GetRowCount                PROCEDURE(),LONG                           !RECORDS(SELF.Q)
 GetRowLen                  PROCEDURE(LONG pRow,LONG pLimit=0,LONG pType=JSCSV:ColumnLen:Max),LONG   !Gets the maximum or total width of a the cells of a row
 LoadBuffer                 PROCEDURE(*STRING pBuffer)                 !Assigns the buffer of CSV data
 LoadFile                   PROCEDURE(STRING pFileName),LONG,PROC      !Load a file
-SetColumnLabel             PROCEDURE(LONG pColumn,*JSCSVColumnDefGroupType pColumnDef),VIRTUAL      !Virtual method gets called when setting the labels of the columns, in case you want to customize label
+SetColumnLabel             PROCEDURE(LONG pColumn,STRING pLabel),LONG,VIRTUAL,PROC!Virtual method gets called when setting the labels of the columns, in case you want to customize label
 SetFileSpecs               PROCEDURE(<STRING pSeparator>,<STRING pLineEnding>,<LONG pFlags>)        !Set the CSV separator, line endings, or flags
 SetKnownDelimiters         PROCEDURE(STRING pDelimiters)              !Set which delimiters to search for in auto-detect
 SetListBox                 PROCEDURE(LONG pFEQ,<WINDOW pOwnerWindow>) !Sets the listbox used to view the data.
@@ -93,7 +91,7 @@ Separator                  CSTRING(5),PRIVATE                         !Defaults 
 LineEnding                 CSTRING(11),PRIVATE                        !Defaults to CRLF (<13,10>) - Use SetFileSpecs() to change.
 Buffer                     &STRING,PRIVATE                            !A reference to the entire contents of CSV file
 RefBuffer                  &STRING,PRIVATE                            !A reference to a string that contains individual references to all of the cells.
-ColumnDefBuffer            &STRING,PRIVATE                            !Column definition data - Contains the labels for the columns 
+ColumnDefQ                 &JSCSVColumnDefQueueType,PRIVATE           !A queue of column names
 Q                          &JSCSVQ,PRIVATE                            !To manage the rows of data
 QPointer                   LONG,PRIVATE                               !So we don't keep re-getting the queue for every column
 Len                        LONG,PRIVATE                               !Number of bytes in the buffer (the contents of the CSV file)

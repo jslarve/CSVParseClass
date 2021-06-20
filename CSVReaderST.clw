@@ -56,8 +56,8 @@ Pipe               STRING('|')
 Space              STRING(' ')
 AutoDetect         STRING('<1>')
                  END
-Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,FONT('Segoe UI',9), |
-      RESIZE
+Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,STATUS(220,140,60,70), |
+      FONT('Segoe UI',9),RESIZE
     PROGRESS,AT(5,3,117,7),USE(PROGRESS1),RANGE(0,100)
     STRING('Progress Text'),AT(7,13,117),USE(?ProgressText)
     PROMPT('Separator:'),AT(210,11),USE(?PROMPT2)
@@ -144,7 +144,11 @@ LoadFile   ROUTINE
     MESSAGE('File does not exist: "' & CLIP(CSVFile) & '"')
     EXIT
   END
-
+  0{PROP:Text}         = '[ST Version]['   & CLIP(CSVFile) & ']'
+  0{PROP:StatusText,1} = ''  
+  0{PROP:StatusText,2} = ''  
+  0{PROP:StatusText,3} = ''  
+  0{PROP:StatusText,4} = ''  
   Progress1 = 0
   DISPLAY(?PROGRESS1)
   UNHIDE(?PROGRESS1)
@@ -160,9 +164,12 @@ LoadFile   ROUTINE
 
 SetCaption ROUTINE
 
-  0{PROP:Text} =  '[ST] ' & CLIP(LEFT(FORMAT(CSV.GetBufferSize() / 1024,@n20))) & ' KBytes ' & CLIP(LEFT(FORMAT(CSV.GetRowCount(),@n20))) & ' rows  ' &|
-                  CLIP(LEFT(FORMAT(CSV.GetColumnCount(),@n20))) & ' columns in ' & (EndTime - StartTime) * .01 & ' seconds. [' & CLIP(CSVFile) & '][' &|
-                  CSV.GetDataName(1) & '][' & CSV.GetDataName(2) & ']'
+  0{PROP:Text}         = '[ST Version]['   & CLIP(CSVFile) & ']'
+  0{PROP:StatusText,1} = 'Bytes: '  & CLIP(LEFT(FORMAT(CSV.GetMemoryUsed(01h) / 1024,@n20))) & ' KB + OverHead: ~'  & CLIP(LEFT(FORMAT(CSV.GetMemoryUsed(06h) / 1024,@n20))) & ' KB = Total: ~' & CLIP(LEFT(FORMAT(CSV.GetMemoryUsed(07h) / 1024,@n20))) & ' KB'
+  0{PROP:StatusText,2} = CLIP(LEFT(FORMAT(CSV.GetColumnCount(),@n20))) & ' cols * ' & CLIP(LEFT(FORMAT(CSV.GetRowCount(),@n20))) & ' rows = '  & CLIP(LEFT(FORMAT(CSV.GetColumnCount()*CSV.GetRowCount(),@n20))) & ' cells' 
+  0{PROP:StatusText,3} = 'Time: '  & (EndTime - StartTime) * .01 & ' secs.'
+  0{PROP:StatusText,4} = CSV.GetDataName(1) & '/' & CSV.GetDataName(2)
+ 
 
 SetSpecs   ROUTINE
 
@@ -170,7 +177,7 @@ SetSpecs   ROUTINE
      
 SizeList   ROUTINE     
 
-  ?CSVList{PROP:Height} = 0{PROP:Height} - ?CSVList{PROP:Ypos} - 4
+  ?CSVList{PROP:Height} = 0{PROP:Height} - ?CSVList{PROP:Ypos} - 4 
   ?CSVList{PROP:Width}  = 0{PROP:Width}  - ?CSVList{PROP:Xpos} - 4
 
 CSV.TakeProgress      PROCEDURE(LONG pProgressPct,LONG pProgress,LONG pRows)!,DERIVED
