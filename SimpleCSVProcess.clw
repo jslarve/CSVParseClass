@@ -1,7 +1,7 @@
 
   PROGRAM
 
-  INCLUDE('JSCSVParseClassST.inc'),ONCE 
+  INCLUDE('JSCSVParseClass.inc'),ONCE 
 
 OMIT('***')
  * Created with Clarion 11.1
@@ -19,9 +19,9 @@ last_name                              STRING(18)
 email                                  STRING(39)
                                      END
 
-Window WINDOW('Loading a queue from CSV'),AT(,,315,224),CENTER,GRAY,FONT('Segoe UI',9)
+Window WINDOW('Loading a queue from CSV'),AT(,,315,224),CENTER,GRAY,FONT('Segoe UI',9),SYSTEM
     LIST,AT(2,2,311,220),USE(?LIST1),FROM(MyQueue),FORMAT('26L(2)|M~ID~C(2)52L(2' & |
-        ')|M~First Name~C(2)53L(2)|M~Last Name~C(2)20L(2)|M~Email~C(2)')
+        ')|M~First Name~C(2)53L(2)|M~Last Name~C(2)20L(2)|M~Email~C(2)'),VSCROLL
   END
 
 
