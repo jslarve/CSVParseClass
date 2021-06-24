@@ -324,8 +324,8 @@ LegalChars    STRING('_{48}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefgh
   IF NOT pForClarion
     RETURN ReturnName
   END 
-  CASE ReturnName[1]
-  OF '0' TO '9'
+  CASE VAL(ReturnName[1])
+  OF 48 TO 58 !'0' TO ':'
     ReturnName = '_' & ReturnName
   END
   LOOP Ndx1 = 1 TO LEN(ReturnName)
@@ -341,16 +341,17 @@ LegalChars    STRING('_{48}0123456789:_{6}ABCDEFGHIJKLMNOPQRSTUVWXYZ_{6}abcdefgh
 JSCSVParseClass.GetColumnNumber            PROCEDURE(STRING pName)!,LONG
 ReturnVal LONG
 Ndx1      LONG,AUTO
+SearchName CSTRING(SIZE(pName)+1)
   CODE
-  
-  SELF.ColumnDefQ.Name_Sort = UPPER(pName)
+  SearchName = UPPER(CLIP(pName))
+  SELF.ColumnDefQ.Name_Sort = SearchName
   GET(SELF.ColumnDefQ,SELF.ColumnDefQ.Name_Sort)
   IF NOT ERRORCODE()
     ReturnVal = POINTER(SELF.ColumnDefQ)
   ELSE
     LOOP Ndx1 = 1 TO RECORDS(SELF.ColumnDefQ)
       GET(SELF.ColumnDefQ, Ndx1)
-      IF MATCH(SELF.ColumnDefQ.Name_Sort,'*' & UPPER(pName) & '*',Match:Wild)
+      IF MATCH(SELF.ColumnDefQ.Name_Sort, SearchName, Match:Wild)
         ReturnVal = Ndx1
         BREAK
       END

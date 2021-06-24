@@ -56,7 +56,7 @@ Ndx  LONG
   !If you already know the column number, or there's no header record, you don't need this part.
   Columns.id         = CSV.GetColumnNumber('id')
   Columns.first_name = CSV.GetColumnNumber('first_name')
-  Columns.last_name  = CSV.GetColumnNumber('last') !using just a part of the label here to test the wildcard search
+  Columns.last_name  = CSV.GetColumnNumber('last*') !using just a part of the label here to test the wildcard search
   Columns.email      = CSV.GetColumnNumber('email') 
   Columns.meds       = CSV.GetColumnNumber('meds')  
    
