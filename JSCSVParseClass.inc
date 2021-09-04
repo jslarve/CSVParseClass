@@ -58,7 +58,7 @@ GenerateFileDef            PROCEDURE(<STRING pLabel>,<STRING pFileName>),STRING 
 GenerateClarionStructure   PROCEDURE(STRING pLabel,STRING pType,<STRING pPre>),STRING !Generate a Clarion structure, such as RECORD, GROUP, or QUEUE.
 GetDataName                PROCEDURE(LONG pData),STRING               !Get Text name of Separators/LineEndings
 GetCellLen                 PROCEDURE(LONG pRow,LONG pColumn),LONG     !Retrieves the length of the data contained in a specific row/column
-GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),*STRING  !Retrieves the data contained in a specific row/column
+GetCellValue               PROCEDURE(LONG pRow,LONG pColumn),STRING   !Retrieves the data contained in a specific row/column
 GetColumnCount             PROCEDURE(),LONG                           !Retrieves the number of columns
 GetColumnLabel             PROCEDURE(LONG pColumn,BYTE pForClarion=FALSE),STRING!Retrieves the name of the specified column.
 GetColumnNumber            PROCEDURE(STRING pName),LONG
@@ -72,12 +72,14 @@ GetRowLen                  PROCEDURE(LONG pRow,LONG pLimit=0,LONG pType=JSCSV:Co
 LoadBuffer                 PROCEDURE(*STRING pBuffer)                 !Assigns the buffer of CSV data
 LoadFile                   PROCEDURE(STRING pFileName),LONG,PROC      !Load a file
 SetColumnLabel             PROCEDURE(LONG pColumn,STRING pLabel),LONG,VIRTUAL,PROC!Virtual method gets called when setting the labels of the columns, in case you want to customize label
-SetFileSpecs               PROCEDURE(<STRING pSeparator>,<STRING pLineEnding>,<LONG pFlags>)        !Set the CSV separator, line endings, or flags
+SetFileSpecs               PROCEDURE(<STRING pSeparator>,<STRING pLineEnding>,<LONG pFlags>,<LONG pConsiderQuotes>,<STRING pQuoteCharacter>)        !Set the CSV separator, line endings, or flags
 SetKnownDelimiters         PROCEDURE(STRING pDelimiters)              !Set which delimiters to search for in auto-detect
 SetListBox                 PROCEDURE(LONG pFEQ,<WINDOW pOwnerWindow>) !Sets the listbox used to view the data.
 SetLoading                 PROCEDURE                                  !Lets the VLB proc know not to do its thing while buffer is in flux
 TakeEvent                  PROCEDURE(LONG pEvent),LONG,PROC,VIRTUAL
 TakeProgress               PROCEDURE(LONG pProgressPct,LONG pProgress,LONG pRows),VIRTUAL
+UnescapeQuotes             PROCEDURE(STRING pQuotedData),STRING       !De-duplicate doubled quote character
+UnescapedQuotesLen         PROCEDURE(STRING pQuotedData),LONG         !Returns the length of the string without escaped quotes
 !Private Properties ---------------------------------------------------------------------------------------------------------
 ColumnCount                LONG,PRIVATE                               !Number of columns - Calculated in InitColumns 
 DataChanged                BYTE,PRIVATE                               !Data has changed
@@ -89,6 +91,14 @@ KnownDelimiters            &STRING,PRIVATE                            !Known col
 RowCount                   LONG,PRIVATE                               !Number of rows    - Calculated in ParseRows
 Separator                  CSTRING(5),PRIVATE                         !Defaults to comma separated - Use SetFileSpecs() to change.
 LineEnding                 CSTRING(11),PRIVATE                        !Defaults to CRLF (<13,10>) - Use SetFileSpecs() to change.
+ConsiderQuotes             LONG,PRIVATE                               !Defaults to 1 true for detecting surrounding quote character - Use SetFileSpecs() to change.
+!Use ConsiderQuotes 0 false to allow non conforming RFC4180 CSVs eg.: PAPER,12" FANFOLD
+!Although it would fail on those files if at the same time it has quoted fields with
+!separators or line endings inside. A solution to allow both at the same time should
+!implement extra logic, for example to skip quotes if they don't start at the first
+!position of a field, but would need a redesign of the class as the class allow separator
+!and lineending characters autodetection and would incur in a which is first problem.
+QuoteCharacter             STRING(1),PRIVATE                          !Defaults to double quote " surrounding (and self escaping) - Use SetFileSpecs() to change.
 Buffer                     &STRING,PRIVATE                            !A reference to the entire contents of CSV file
 RefBuffer                  &STRING,PRIVATE                            !A reference to a string that contains individual references to all of the cells.
 ColumnDefQ                 &JSCSVColumnDefQueueType,PRIVATE           !A queue of column names

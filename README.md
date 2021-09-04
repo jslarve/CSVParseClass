@@ -32,12 +32,21 @@
 There are quite a few features that I've meant to add, such as: 
 * Import/export of the grid map (so it doesn't have to re-parse every time you load the same CSV)
 * Export to XML/JSON/SQL.
-* Support of escaped double quotes ("").
 
 #### Known drawbacks/limitations
-* Need to add support for escaped double quotes ("").
 * There's a finite size of data that can be loaded into a 32 bit process. Putting LARGE_ADDRESS into the .EXP will allow more bytes to be loaded, but if the file exceeds the maximum size, then this class will not be suitable.
 * Although no extra memory is used for COPIES of the data, memory does need to be allocated for all of the &STRING references used for each "cell". Sometimes this can be as much as the data itself, sometimes not. So oftentimes, the allocated memory <em> could </em> be as much as classes that DO create copies of the data. The number of rows and columns are what determine the amount of memory used.
 
 
 ## NOTE: This has not been extensively tested. It works on what I've thrown at it. If you have a CSV that this class fails with, I'd appreciate an example.
+
+---
+
+# Added to this commit by Federico Navarro (Thank you very much Federico!)
+
+* Support of escaped double quotes (""). More comments on the class (clw & inc) 
+* Support of LineEndings characters on quoted text ("..CR/LF..").
+* Possibility to choose other quote characters or to not consider special meaning to quotes
+* Possibility to have a last row without LineEndings characters
+* On the FileDefinition generator inform separator as /FIELDDELIMITER instead of /COMMA when it has more than 1 character
+* Added QuoteCharacter and Auto Reload to the UI on CSVReader.clw

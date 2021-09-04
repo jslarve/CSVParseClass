@@ -45,6 +45,7 @@ Progress1        BYTE
 LineEnding       CSTRING(11)
 Separator        CSTRING(11)
 FirstRowIsLabels BYTE(TRUE)
+AutoReload       BYTE(TRUE)
 SeparatorGroup   GROUP,PRE()
 Comma              STRING(',')
 Tab                STRING('<9>')
@@ -54,36 +55,50 @@ Pipe               STRING('|')
 Space              STRING(' ')
 AutoDetect         STRING('<1>')
                  END
-Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX,STATUS(220,140,60,70), |
-      FONT('Segoe UI',9),RESIZE
-    PROGRESS,AT(5,3,117,7),USE(PROGRESS1),RANGE(0,100)
-    STRING('Progress Text'),AT(7,13,117),USE(?ProgressText)
-    PROMPT('Separator:'),AT(210,11),USE(?PROMPT2)
-    COMBO(@s20),AT(245,9,58,12),USE(Separator),TIP('If your desired separator is' & |
-        ' not listed, enter CHR(YourASCIICode) (no quotes) OR ''YourCharacter'' ' & |
-        '(in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiColon|Pipe|Space|Auto' & |
-        'Detect'),FORMAT('20L(2)|M')
-    OPTION('LineEnding'),AT(307,2,160,23),USE(LineEnding),BOXED
-      RADIO('Windows'),AT(310,12,39),USE(?LineEndingRADIO1),TIP('Windows Style -' & |
-          ' AKA 0d0ah'),VALUE('<13,10>')
-      RADIO('Mac'),AT(354,12,24),USE(?LineEndingRADIO2),TIP('Mac Style - AKA 0dh'), |
-          VALUE('<13>')
-      RADIO('UNIX'),AT(382,12,29),USE(?LineEndingRADIO3),TIP('UNIX Style - AKA 0ah'), |
-          VALUE('<10>')
-      RADIO('Auto Detect'),AT(415,12,46,10),USE(?LineEndingRADIO4),TIP('Auto det' & |
-          'ect line endings'),VALUE('<0>')
+QuoteCharacter   CSTRING(12)
+QuoteGroup       GROUP,PRE()
+DoubleQuote        STRING('"')
+SingleQuote        STRING('''')
+None               STRING('<0>')
+                 END
+Window WINDOW('CSV Parser Demo'),AT(,,707,268),CENTER,GRAY,IMM,MAX, |
+            STATUS(220,140,60,70),FONT('Segoe UI',9),RESIZE
+        PROGRESS,AT(5,3,117,7),USE(PROGRESS1),RANGE(0,100)
+        STRING('Progress Text'),AT(7,13,117),USE(?ProgressText)
+        PROMPT('Quote:'),AT(124,11),USE(?QuotePrompt)
+        COMBO(@s20),AT(148,9,58,12),USE(QuoteCharacter),TIP('If your desired quo' & |
+                'techaracter is not listed, enter CHR(YourASCIICode) (no quotes)' & |
+                ' OR ''YourCharacter'' (in quotes).'),DROP(10),FROM('DoubleQuote|SingleQuo' & |
+                'te|None'),FORMAT('20L(2)|M')
+        PROMPT('Separator:'),AT(210,11),USE(?PROMPT2)
+        COMBO(@s20),AT(245,9,58,12),USE(Separator),TIP('If your desired separato' & |
+                'r is not listed, enter CHR(YourASCIICode) (no quotes) OR ''Your' & |
+                'Character'' (in quotes).'),DROP(10),FROM('Comma|Tab|Colon|SemiC' & |
+                'olon|Pipe|Space|AutoDetect'),FORMAT('20L(2)|M')
+        OPTION('LineEnding'),AT(307,2,160,23),USE(LineEnding),BOXED
+            RADIO('Windows'),AT(310,12,39),USE(?LineEndingRADIO1),TIP('Windows S' & |
+                    'tyle - AKA 0d0ah'),VALUE('<13,10>')
+            RADIO('Mac'),AT(354,12,24),USE(?LineEndingRADIO2),TIP('Mac Style - A' & |
+                    'KA 0dh'),VALUE('<13>')
+            RADIO('UNIX'),AT(382,12,29),USE(?LineEndingRADIO3),TIP('UNIX Style -' & |
+                    ' AKA 0ah'),VALUE('<10>')
+            RADIO('Auto Detect'),AT(415,12,46,10),USE(?LineEndingRADIO4), |
+                    TIP('Auto detect line endings'),VALUE('<0>')
+        END
+        CHECK('Auto Reload'),AT(474,4,65,10),USE(AutoReload),TIP('Reload CSV automatically on parameter' & |
+                's change.')
+        CHECK('First Row is Labels'),AT(474,15,65),USE(FirstRowIsLabels), |
+                TIP('First row of the CSV contains the label of each column.')
+        BUTTON('Gen Clarion Structure'),AT(545,4,73,20),USE(?GenerateClarionStructureButton) |
+                ,TIP('Generate a Clarion structure that can be compiled in anoth' & |
+                'er program.')
+        BUTTON('&Open'),AT(621,4,26,20),USE(?OpenButton),TIP('Open a CSV file')
+        BUTTON('&Reload'),AT(650,4,26,20),USE(?ReloadButton),TIP('Reload the cur' & |
+                'rent CSV file from disk.')
+        BUTTON('&Close'),AT(679,4,26,20),USE(?CloseButton),STD(STD:Close), |
+                TIP('Exit the application.')
+        LIST,AT(4,29,701,237),USE(?CSVList),HVSCROLL,COLUMN,FROM('')
     END
-    CHECK('First Row is Labels'),AT(474,10,65),USE(FirstRowIsLabels),TIP('First ' & |
-        'row of the CSV contains the label of each column.')
-    BUTTON('Gen Clarion Structure'),AT(545,4,73,20),USE(?GenerateClarionStructureButton) |
-        ,TIP('Generate a Clarion structure that can be compiled in another program.')
-    BUTTON('&Open'),AT(621,4,26,20),USE(?OpenButton),TIP('Open a CSV file')
-    BUTTON('&Close'),AT(679,4,26,20),USE(?CloseButton),STD(STD:Close), |
-        TIP('Exit the application.')
-    LIST,AT(4,29,701,237),USE(?CSVList),HVSCROLL,COLUMN,FROM('')
-    BUTTON('&Reload'),AT(650,4,26,20),USE(?ReloadButton),TIP('Reload the current' & |
-        ' CSV file from disk.')
-  END
 
 StartTime LONG
 EndTime   LONG
@@ -93,7 +108,10 @@ CSVFile   STRING(FILE:MaxFilePath)
 
   Separator = 'AutoDetect'
   BIND(SeparatorGroup)
+  QuoteCharacter = 'DoubleQuote'
+  BIND(QuoteGroup)
   OPEN(Window)  
+  SELECT(?CSVList)
   DO SizeList
   StartTime = CLOCK()
   CSVFile = LONGPATH('.\SampleData\CSVdemo2.Comma.CRLF.csv')
@@ -116,8 +134,11 @@ CSVFile   STRING(FILE:MaxFilePath)
         SETCURSOR()
      OF EVENT:ACCEPTED
        CASE FIELD()
-       OF ?FirstRowIsLabels OROF ?LineEnding OROF ?Separator
+       OF ?FirstRowIsLabels OROF ?LineEnding OROF ?Separator OROF ?QuoteCharacter OROF ?AutoReload
          DO SetSpecs
+         IF AUTORELOAD
+           DO LoadFile
+         END
        OF ?OpenButton
          IF FILEDIALOG('Select CSV',CSVFile,'CSV Files|*.CSV|Text Files|*.TXT',FILE:KeepDir+FILE:LongName)
            DO LoadFile
@@ -172,7 +193,7 @@ SetCaption ROUTINE
 
 SetSpecs   ROUTINE
 
-  CSV.SetFileSpecs(EVALUATE(Separator),LineEnding,FirstRowIsLabels)
+  CSV.SetFileSpecs(EVALUATE(Separator),LineEnding,FirstRowIsLabels,CHOOSE(QuoteCharacter='None',0,1),EVALUATE(QuoteCharacter))
      
 SizeList   ROUTINE     
 

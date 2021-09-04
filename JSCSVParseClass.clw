@@ -40,7 +40,7 @@ Columns                   &STRING      !A pseudo record of &STRING references th
 
   MAP
     JSCSVGetTempFileAndPathName(),STRING
-    JSCSVDetectLineEnding(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>),STRING
+    JSCSVDetectLineEnding(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>,LONG pConsiderQuotes,STRING pQuoteCharacter),STRING
     MODULE('')
       JSCSVGetTempPath(ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempPathA'),DLL(1) 
       JSCSVGetTempFilename(*CSTRING,*CSTRING,ULONG,*CSTRING),RAW,ULONG,PASCAL,NAME('GetTempFileNameA'),DLL(1)
@@ -104,7 +104,7 @@ JSCSVParseClass.Construct PROCEDURE
   SELF.ColumnDefQ &= NEW JSCSVColumnDefQueueType
   SELF.SS         &= NEW SystemStringClass
   SELF.rDummy     &= NEW STRING(1)
-  SELF.SetFileSpecs('<1>','',JSCSV:FirstRowIsLabels) !Default to Autodetect
+  SELF.SetFileSpecs('<1>','',JSCSV:FirstRowIsLabels,1,'"') !Default to Autodetect
   SELF.SetKnownDelimiters(',<9>:;| ')
   SELF.ColumnCount = 1 
   SELF.RowCount    = 0 
@@ -165,8 +165,22 @@ NameAttr CSTRING(FILE:MaxFilePath+1)
     NameAttr = 'NAME(''' & CLIP(pFileName) & ''')'
   END
 
-  FileDef.FromString(Label & ALL(' ',35-LEN(Label)) & 'FILE,DRIVER(''BASIC'',''/COMMA=' & VAL(SELF.Separator) & ' /ENDOFRECORD=' & EOR & '''),PRE(' & PRE & '),' & NameAttr & '<13,10>' &  SELF.GenerateClarionStructure('RECORD','RECORD') & '<13,10> {35}END<13,10>')
-  
+  FileDef.FromString(Label & ALL(' ',35-LEN(Label)) & 'FILE,DRIVER(''BASIC'',''' &|
+  CHOOSE(LEN(SELF.Separator)=1,'/COMMA=' & VAL(SELF.Separator), |
+                               '/FIELDDELIMITER=' & LEN(SELF.Separator) &|
+                      CHOOSE(LEN(SELF.Separator) > 0,',' & VAL(SELF.Separator[1]),'') &|
+                      CHOOSE(LEN(SELF.Separator) > 1,',' & VAL(SELF.Separator[2]),'') &|
+                      CHOOSE(LEN(SELF.Separator) > 2,',' & VAL(SELF.Separator[3]),'') &|
+                      CHOOSE(LEN(SELF.Separator) > 3,',' & VAL(SELF.Separator[4]),''))&|
+  ' /ENDOFRECORD=' & EOR & ' /QUOTE=' & VAL(SELF.QuoteCharacter) & '''),PRE(' & PRE &|
+  '),' & NameAttr & '<13,10>' &  SELF.GenerateClarionStructure('RECORD','RECORD') &|
+  '<13,10> {35}END<13,10>')
+  !Note: IF ConsiderQuotes = 0 /QUOTE parameter should be analized (if passing <0>
+  ! or omitting it or alerting)
+  !Note: /COMMA reconsidered using FIELDDELIMITER for multi-character separator,
+  ! using defined max size of 4 characters CSTR(5), adapt it for more if changed latter
+  !Note: The three parameters could be ommited if they are equal to default values of
+  ! them
   RETURN FileDef.ToString()
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -231,6 +245,20 @@ ReturnVal CSTRING(21)
     ELSE
       ReturnVal = pData
     END
+  OF 3  
+    CASE SELF.ConsiderQuotes
+    OF 0
+      ReturnVal = 'None'
+    ELSE
+      CASE SELF.QuoteCharacter
+      OF '"'
+        ReturnVal = 'DoubleQuote'
+      OF ''''
+        ReturnVal = 'SingleQuote'
+      ELSE
+        ReturnVal = pData
+      END
+    END
   END  
   RETURN ReturnVal
 
@@ -242,6 +270,7 @@ ReturnVal CSTRING(21)
 !======================================================================================================================================================
 JSCSVParseClass.GetCellLen   PROCEDURE(LONG pRow,LONG pColumn)!,LONG    !Retrieves the length of the data contained in a specific row/column
 rLen        &LONG
+rColumnData &JSCSVColumnDataGroupType
 
   CODE
 
@@ -252,13 +281,33 @@ rLen        &LONG
     END
     SELF.QPointer = pRow
   END  
+! IF SELF.ConsiderQuotes 
+!   RETURN LEN(SELF.GetCellValue(pRow,pColumn)) 
+!Less optimal but more precise, because of possible unescaping double double quotes
+!other related functions calling this: possible effect of not returning exact lenght
+! GetMaximumColumnTextWidth: visually a little wider column if the longest cell had escaped quotes
+! CopyColumn routine: one extra space by each unescaped quote after the cell value
+! CopyRow routine: one extra space by each unescaped quote after the cell value
+! GetColumnLen:
+!   called by GenerateFileDef: wider column definition if the longest cell had escaped quotes
+!   called by CopyColumn routine: none if the same method is used on the direct call to GetCellLen
+! GetRowLen:
+!   called by CopyRow routine: none if the same method is used on the direct call to GetCellLen
+! END
   CASE pColumn
   OF 1 TO SELF.ColumnCount 
     IF NOT SELF.Q.Columns &= NULL
+     IF SELF.ConsiderQuotes 
+      rColumnData &= (ADDRESS(SELF.Q.Columns) + ((pColumn-1) * 8))
+      IF NOT rColumnData &= NULL
+        RETURN SELF.UnescapedQuotesLen(rColumnData.Data)
+      END
+     ELSE
       rLen &= ((ADDRESS(SELF.Q.Columns) + ((pColumn-1) * 8)) + 4)
       IF NOT rLen &= NULL
         RETURN rLen
       END
+     END
     END
   END
   RETURN 0
@@ -270,7 +319,7 @@ rLen        &LONG
 !!! <param name="pColumn">Column where data is located</param>
 !!! <returns>A STRING reference</returns>
 !======================================================================================================================================================
-JSCSVParseClass.GetCellValue PROCEDURE(LONG pRow,LONG pColumn)!,*STRING
+JSCSVParseClass.GetCellValue PROCEDURE(LONG pRow,LONG pColumn)!,STRING (previously *STRING)
 rColumnData &JSCSVColumnDataGroupType
 
   CODE
@@ -287,6 +336,9 @@ rColumnData &JSCSVColumnDataGroupType
     IF NOT SELF.Q.Columns &= NULL
       rColumnData &= (ADDRESS(SELF.Q.Columns) + ((pColumn-1) * 8))
       IF NOT rColumnData &= NULL
+        IF SELF.ConsiderQuotes
+          RETURN SELF.UnescapeQuotes(rColumnData.Data)
+        END
         RETURN rColumnData.Data 
       END  
     END
@@ -602,8 +654,9 @@ JSCSVParseClass.InitColumns  PROCEDURE !,PRIVATE
 Ndx1          LONG,AUTO
 SaveNdx       LONG,AUTO
 SeparatorLen  LONG,AUTO
-ColumnCount   LONG,AUTO
-InsideQuote   BYTE
+ColumnNdx     LONG,AUTO !Column counter
+InsideQuote   BYTE,AUTO !Flag determined by whether we are currently inside a quoted column as we parse
+UnquoteLen    LONG,AUTO !Number of characters from begining and end to avoid
 
   CODE
   
@@ -629,47 +682,60 @@ LabelColumns ROUTINE
 
 CountColumns ROUTINE
 
-  InsideQuote = FALSE
-  ColumnCount = 1
   GET(SELF.Q,1)   
   SELF.QPointer = POINTER(SELF.Q) 
   IF SELF.Q.Line &= NULL
     EXIT
   END
-  SaveNdx   = 1
-  LOOP Ndx1 = SaveNdx TO SELF.Q.Len 
-    IF Ndx1 > SELF.Q.Len 
-      BREAK
-    END
-    !Need to support double-double quotes.
-    IF SELF.Q.Line[Ndx1] = '"'
-      IF InsideQuote
-        SELF.SetColumnLabel(0, SELF.Q.Line[SaveNdx : Ndx1-1])
-        SaveNdx      = Ndx1 + SeparatorLen + 1
-        IF Ndx1 < SELF.Q.Len
-          Ndx1        += 1
-          ColumnCount += 1
+
+  !this code could be localized on a subfunction to reutilize on ParseColumn
+  !using a parameter like Counting true/false to count columns and call SetColumnLabel
+  !or to consider columns already counted and call SetElementRef
+    SaveNdx     = 1
+    ColumnNdx   = 0
+    InsideQuote = 0
+    LOOP Ndx1 = 1 TO SELF.Q.Len
+     !IF ColumnNdx+1 => SELF.ColumnCount 
+     !  BREAK
+     !END
+      IF SELF.ConsiderQuotes
+        IF SELF.Q.Line[Ndx1] = SELF.QuoteCharacter
+          InsideQuote = BXOR(InsideQuote,1)
+          CYCLE
         END
-        InsideQuote  = FALSE
-        CYCLE
-      ELSE
-        InsideQuote  = TRUE
-        SaveNdx      = Ndx1 + 1
-        CYCLE
       END
+      IF InsideQuote THEN CYCLE END
+
+      IF SELF.Q.Line[Ndx1] = SELF.Separator[1]  !fast first comparison
+        IF Ndx1+SeparatorLen-1 <= SELF.Q.Len
+          IF SELF.Q.Line[Ndx1 : Ndx1+SeparatorLen-1] = SELF.Separator
+            IF SELF.ConsiderQuotes <> 0 AND SELF.Q.Line[SaveNdx] = SELF.QuoteCharacter |
+                                        AND SELF.Q.Line[Ndx1-1 ] = SELF.QuoteCharacter
+              UnquoteLen = 1
+            ELSE
+              UnquoteLen = 0
+            END
+            SELF.SetColumnLabel(        0,SELF.Q.Line[SaveNdx+UnquoteLen : Ndx1-1-UnquoteLen])
+            SaveNdx = Ndx1+SeparatorLen
+            ColumnNdx += 1
+          END
+        END
+      END  
     END
-    IF NOT InsideQuote
-      IF (SELF.Q.Line[Ndx1 : Ndx1 + SeparatorLen - 1] = SELF.Separator) 
-        SELF.SetColumnLabel(0, SELF.Q.Line[SaveNdx : Ndx1-1])
-        SaveNdx      = Ndx1 + 1
-        ColumnCount += 1
-      ELSIF (Ndx1 => SELF.Q.Len)  
-        SELF.SetColumnLabel(0, SELF.Q.Line[SaveNdx : Ndx1])
-        BREAK
+    IF SaveNdx <= SELF.Q.Len  
+      IF SELF.ConsiderQuotes <> 0 AND SELF.Q.Line[SaveNdx   ] = SELF.QuoteCharacter |
+                                  AND SELF.Q.Line[SELF.Q.Len] = SELF.QuoteCharacter
+        UnquoteLen = 1
+      ELSE
+        UnquoteLen = 0
       END
-    END  
-  END
-  SELF.ColumnCount = ColumnCount
+      SELF.SetColumnLabel(        0,SELF.Q.Line[SaveNdx+UnquoteLen : SELF.Q.Len-UnquoteLen])
+    ELSE  !line ended with a separator
+      SELF.SetColumnLabel(        0,'')
+    END
+  !end of reusable code
+
+  SELF.ColumnCount = ColumnNdx + 1
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Private method for parsing columns</summary>
@@ -682,6 +748,7 @@ SaveNdx       LONG,AUTO !Counter
 SeparatorLen  LONG,AUTO !Length of a the separator property
 ColumnNdx     LONG,AUTO !Column counter
 InsideQuote   BYTE,AUTO !Flag determined by whether we are currently inside a quoted column as we parse
+UnquoteLen    LONG,AUTO !Number of characters from begining and end to avoid
 ColumnAddress LONG,AUTO !The ADDRESS() of the current SELF.Q.Columns buffer
 NullString    &STRING   !Just a NULL string to return
 Recs          LONG,AUTO !Number of records in queue
@@ -716,40 +783,45 @@ ProgressTic   LONG      !Frequency of progress display. This area needs work.
     PUT(SELF.Q)
     SaveNdx     = 1
     ColumnNdx   = 0
-    InsideQuote = FALSE
-    LOOP Ndx1 = SaveNdx TO SELF.Q.Len
-      IF ColumnNdx > SELF.ColumnCount 
+    InsideQuote = 0
+    LOOP Ndx1 = 1 TO SELF.Q.Len
+      IF ColumnNdx+1 => SELF.ColumnCount 
         BREAK
       END
-      IF Ndx1 <= SELF.Q.Len
-        IF SELF.Q.Line[Ndx1] = '"'
-          IF InsideQuote
-            SELF.SetElementRef(ColumnNdx,SELF.Q.Line[SaveNdx : Ndx1-1])
-            SaveNdx = Ndx1+SeparatorLen+1
-            InsideQuote = FALSE
+      IF SELF.ConsiderQuotes
+        IF SELF.Q.Line[Ndx1] = SELF.QuoteCharacter
+          InsideQuote = BXOR(InsideQuote,1)
+          CYCLE
+        END
+      END
+      IF InsideQuote THEN CYCLE END
+
+      IF SELF.Q.Line[Ndx1] = SELF.Separator[1]  !fast first comparison
+        IF Ndx1+SeparatorLen-1 <= SELF.Q.Len
+          IF SELF.Q.Line[Ndx1 : Ndx1+SeparatorLen-1] = SELF.Separator
+            IF SELF.ConsiderQuotes <> 0 AND SELF.Q.Line[SaveNdx] = SELF.QuoteCharacter |
+                                        AND SELF.Q.Line[Ndx1-1 ] = SELF.QuoteCharacter
+              UnquoteLen = 1
+            ELSE
+              UnquoteLen = 0
+            END
+            SELF.SetElementRef (ColumnNdx,SELF.Q.Line[SaveNdx+UnquoteLen : Ndx1-1-UnquoteLen])
+            SaveNdx = Ndx1+SeparatorLen
             ColumnNdx += 1
-            Ndx1 += 1
-            CYCLE
-          ELSE
-            InsideQuote = TRUE
-            SaveNdx = Ndx1 + 1
-            CYCLE
           END
         END
-      ELSE 
-        InsideQuote = FALSE
-      END
-      IF NOT InsideQuote
-        IF SELF.Q.Line[Ndx1 : Ndx1 + SeparatorLen-1] = SELF.Separator 
-          SELF.SetElementRef(ColumnNdx,SELF.Q.Line[SaveNdx : Ndx1-1])
-          SaveNdx = Ndx1 + 1
-          ColumnNdx += 1
-        ELSIF Ndx1 = SELF.Q.Len 
-          SELF.SetElementRef(ColumnNdx,SELF.Q.Line[SaveNdx : SELF.Q.Len])
-          ColumnNdx += 1
-          BREAK
-        END
       END  
+    END
+    IF SaveNdx <= SELF.Q.Len  
+      IF SELF.ConsiderQuotes <> 0 AND SELF.Q.Line[SaveNdx   ] = SELF.QuoteCharacter |
+                                  AND SELF.Q.Line[SELF.Q.Len] = SELF.QuoteCharacter
+        UnquoteLen = 1
+      ELSE
+        UnquoteLen = 0
+      END
+      SELF.SetElementRef (ColumnNdx,SELF.Q.Line[SaveNdx+UnquoteLen : SELF.Q.Len-UnquoteLen])
+    ELSE  !line ended with a separator
+      SELF.SetElementRef (ColumnNdx,SELF.rDummy)
     END
     IF NOT LineNdx1 % ProgressTic
        SELF.TakeProgress(LineNdx1 / SELF.GetRowCount() * 100, LineNdx1, SELF.GetRowCount() )
@@ -782,20 +854,18 @@ RowCount      USHORT
   END 
   LOOP LineNdx1 = 1 TO RowCount
     GET(SELF.Q,LineNdx1)
+    InsideQuote = 0
     LOOP Ndx1 = 1 TO SELF.Q.Len
-      IF SELF.Q.Line[Ndx1] = '"'
-        IF InsideQuote
-          InsideQuote = FALSE
-          CYCLE
-        ELSE
-          InsideQuote = TRUE
+      IF SELF.ConsiderQuotes
+        IF SELF.Q.Line[Ndx1] = SELF.QuoteCharacter
+          InsideQuote = BXOR(InsideQuote,1)
           CYCLE
         END
       END
-      IF NOT InsideQuote
-        IF EligibleChars[VAL(SELF.Q.Line[Ndx1])]
-          CharCount[LineNdx1,VAL(SELF.Q.Line[Ndx1])] += 1
-        END  
+      IF InsideQuote THEN CYCLE END
+
+      IF EligibleChars[VAL(SELF.Q.Line[Ndx1])]
+        CharCount[LineNdx1,VAL(SELF.Q.Line[Ndx1])] += 1
       END
     END
   END
@@ -827,33 +897,54 @@ JSCSVParseClass.ParseRows     PROCEDURE !,LONG
 Ndx1          LONG,AUTO
 SaveNdx       LONG,AUTO
 LineEndingLen LONG,AUTO
-
+BufferMax     LONG,AUTO
+InsideQuote   BYTE,AUTO
   CODE   
 
   IF SELF.Buffer &= NULL
     RETURN 0
   END
   IF SELF.LineEnding = ''
-    SELF.LineEnding = JSCSVDetectLineEnding(SELF.Buffer)
+    SELF.LineEnding = JSCSVDetectLineEnding(SELF.Buffer,,,SELF.ConsiderQuotes,SELF.QuoteCharacter)
     IF SELF.LineEnding = ''
       RETURN 0
     END
   END
   LineEndingLen = LEN(SELF.LineEnding)
-  IF SELF.GetBufferSize() < LineEndingLen
+  BufferMax = SELF.GetBufferSize()
+  IF BufferMax < LineEndingLen  
     RETURN 0
   END
   SaveNdx = 1
-  LOOP 
-    Ndx1 = INSTRING(SELF.LineEnding,SELF.Buffer,1,SaveNdx)
-    IF NOT Ndx1
-      BREAK
+  InsideQuote = 0
+  LOOP Ndx1 = 1 TO BufferMax
+    IF SELF.ConsiderQuotes  
+      IF SELF.Buffer[Ndx1] = SELF.QuoteCharacter
+        InsideQuote = BXOR(InsideQuote,1)
+        CYCLE
+      END
     END
+    IF InsideQuote THEN CYCLE END
+
+    IF SELF.Buffer[Ndx1] = SELF.LineEnding[1]  !fast first comparison
+      IF Ndx1+LineEndingLen-1 <= BufferMax
+        IF SELF.Buffer[Ndx1 : Ndx1+LineEndingLen-1] = SELF.LineEnding
+          SELF.Q.Columns &=  NULL
+          SELF.Q.Line    &=  SELF.Buffer[SaveNdx : Ndx1-1]
+          SELF.Q.Len      =  LEN(SELF.Q.Line)
+          ADD(SELF.Q)
+          SaveNdx         =  Ndx1 + LineEndingLen
+        END
+      END
+    END
+  END
+  !from https://datatracker.ietf.org/doc/html/rfc4180 
+  !"2. The last record in the file may or may not have an ending line break"
+  IF SaveNdx <= BufferMax 
     SELF.Q.Columns &=  NULL
-    SELF.Q.Line    &=  SELF.Buffer[SaveNdx : Ndx1-1]
+    SELF.Q.Line    &=  SELF.Buffer[SaveNdx : BufferMax]
     SELF.Q.Len      =  LEN(SELF.Q.Line)
     ADD(SELF.Q)
-    SaveNdx         =  Ndx1 + LineEndingLen
   END
   RETURN RECORDS(SELF.Q)
   
@@ -950,7 +1041,7 @@ AssignValues ROUTINE
 !!! <param name="pFlags">Flags</param>
 !!! <returns>Nothing</returns>
 !======================================================================================================================================================
-JSCSVParseClass.SetFileSpecs     PROCEDURE(<STRING pSeparator>,<STRING pLineEnding>,<LONG pFlags>)
+JSCSVParseClass.SetFileSpecs     PROCEDURE(<STRING pSeparator>,<STRING pLineEnding>,<LONG pFlags>,<LONG pConsiderQuotes>,<STRING pQuoteCharacter>)
   
   CODE
 
@@ -964,6 +1055,14 @@ JSCSVParseClass.SetFileSpecs     PROCEDURE(<STRING pSeparator>,<STRING pLineEndi
 
   IF NOT OMITTED(pFlags)
     SELF.Flags = pFlags
+  END
+
+  IF NOT OMITTED(pConsiderQuotes)
+    SELF.ConsiderQuotes = pConsiderQuotes
+  END
+
+  IF NOT OMITTED(pQuoteCharacter)
+    SELF.QuoteCharacter = pQuoteCharacter
   END
 
 !------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1076,6 +1175,61 @@ JSCSVParseClass.TakeProgress  PROCEDURE(LONG pProgressPct,LONG pProgress,LONG pR
    
    !Virtual Method
 
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>De-duplicate doubled quote character</summary>
+!!! <param name="pQuotedData">Data with possible doubled quote character</param>
+!!! <returns>A copy of the passed STRING with each doubled quote character made single</returns>
+!======================================================================================================================================================
+JSCSVParseClass.UnescapeQuotes PROCEDURE(STRING pQuotedData)!,STRING
+LocalString  STRING(SIZE(pQuotedData))
+Ndx1         LONG,AUTO
+DQuotesCount LONG
+LastWasQuote LONG
+  CODE
+  LOOP Ndx1 = 1 TO SIZE(pQuotedData)
+    IF SELF.ConsiderQuotes
+      IF pQuotedData[Ndx1] = SELF.QuoteCharacter
+        IF LastWasQuote
+          DQuotesCount += 1
+          LastWasQuote  = 0
+        ELSE
+          LastWasQuote  = 1
+        END
+      ELSE
+        LastWasQuote    = 0
+      END
+    END
+    LocalString[Ndx1-DQuotesCount] = pQuotedData[Ndx1]
+  END
+  RETURN LocalString[1 : SIZE(pQuotedData) - DQuotesCount] 
+
+!------------------------------------------------------------------------------------------------------------------------------------------------------
+!!! <summary>Returns the length of the string without escaped quotes</summary>
+!!! <param name="pQuotedData">Data with possible doubled quote character</param>
+!!! <returns>The length of the string without escaped quotes</returns>
+!======================================================================================================================================================
+JSCSVParseClass.UnescapedQuotesLen PROCEDURE(STRING pQuotedData)!,LONG
+Ndx1         LONG,AUTO
+DQuotesCount LONG
+LastWasQuote LONG
+  CODE
+  LOOP Ndx1 = 1 TO SIZE(pQuotedData)
+    IF SELF.ConsiderQuotes
+      IF pQuotedData[Ndx1] = SELF.QuoteCharacter
+        IF LastWasQuote
+          DQuotesCount += 1
+          LastWasQuote  = 0
+        ELSE
+          LastWasQuote  = 1
+        END
+      ELSE
+        LastWasQuote    = 0
+      END
+    END
+  END
+  RETURN SIZE(pQuotedData)-DQuotesCount
+         
+         
 !------------------------------------------------------------------------------------------------------------------------------------------------------
 !!! <summary>Registers events for the listbox</summary>
 !!! <returns>Nothing</returns>
@@ -1261,11 +1415,12 @@ TotalLength         ULONG
   RETURN(LONGPATH(CLIP(TempFilename)))
             
 !-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSCSVDetectLineEnding        PROCEDURE(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>)!,STRING
+JSCSVDetectLineEnding        PROCEDURE(*STRING pBuffer,LONG pMaxBytes=0FFFFh,<STRING pDefault>,LONG pConsiderQuotes,STRING pQuoteCharacter)!,STRING
 !-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Ndx1       USHORT,AUTO
+Ndx1       LONG,AUTO
 Terminator CSTRING(11)
-BufferMax  LONG
+BufferMax  LONG,AUTO
+InsideQuote BYTE,AUTO
 
   CODE
 
@@ -1277,7 +1432,16 @@ BufferMax  LONG
     BufferMax = SIZE(pBuffer)    
   END
   
-  LOOP Ndx1 = 1 TO BufferMax-1
+  InsideQuote = 0
+  LOOP Ndx1 = 1 TO BufferMax !-1
+    IF pConsiderQuotes
+      IF pBuffer[Ndx1] = pQuoteCharacter
+        InsideQuote = BXOR(InsideQuote,1)
+        CYCLE
+      END
+    END
+    IF InsideQuote THEN CYCLE END
+
     CASE pBuffer[Ndx1] 
     OF '<10>'
       Terminator = '<10>'
