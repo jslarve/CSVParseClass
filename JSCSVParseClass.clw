@@ -1433,7 +1433,7 @@ InsideQuote BYTE,AUTO
   END
   
   InsideQuote = 0
-  LOOP Ndx1 = 1 TO BufferMax !-1
+  LOOP Ndx1 = 1 TO BufferMax 
     IF pConsiderQuotes
       IF pBuffer[Ndx1] = pQuoteCharacter
         InsideQuote = BXOR(InsideQuote,1)
@@ -1447,7 +1447,7 @@ InsideQuote BYTE,AUTO
       Terminator = '<10>'
       BREAK
     OF '<13>'
-      IF pBuffer[Ndx1+1] = '<10>'
+      IF Ndx1 < BufferMax AND pBuffer[Ndx1+1] = '<10>'
         Terminator = '<13,10>'
       ELSE
         Terminator = '<13>'
