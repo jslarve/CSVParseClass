@@ -1186,6 +1186,11 @@ Ndx1         LONG,AUTO
 DQuotesCount LONG
 LastWasQuote LONG
   CODE
+  
+  IF NOT SIZE(pQuotedData) ! Had a GPF when there was no size
+    RETURN ''              ! Adding this for a quick fix. Can refactor later.
+  END
+  
   LOOP Ndx1 = 1 TO SIZE(pQuotedData)
     IF SELF.ConsiderQuotes
       IF pQuotedData[Ndx1] = SELF.QuoteCharacter
